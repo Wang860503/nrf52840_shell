@@ -9,27 +9,13 @@
  */
 
 #include <zephyr/devicetree.h>
-#include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 
-#define RS485_DE_PIN 21
-#define RS485_DE_PORT DT_NODELABEL(gpio0)
-#define DE_TX 1
-#define DE_RX 0
-
-static const struct device* const gpio0 = DEVICE_DT_GET(RS485_DE_PORT);
+LOG_MODULE_REGISTER(my_app);
 
 int main(void) {
-  if (device_is_ready(gpio0)) {
-    gpio_pin_configure(gpio0, RS485_DE_PIN, GPIO_OUTPUT_ACTIVE);
-    gpio_pin_set(gpio0, RS485_DE_PIN, DE_TX);
-    k_msleep(2);
-  }
-  printk("Senao Shell ready. Type 'help' for commands.\n");
-  if (device_is_ready(gpio0)) {
-    k_msleep(2);
-    gpio_pin_set(gpio0, RS485_DE_PIN, DE_RX);
-  }
+  LOG_INF("Senao Shell ready. Type 'help' for commands.\n");
 
   k_sleep(K_FOREVER);
   return 0;
