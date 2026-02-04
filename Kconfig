@@ -1,0 +1,40 @@
+# Copyright (c) 2025 Nordic Semiconductor ASA
+# SPDX-License-Identifier: Apache-2.0
+
+# Project Kconfig root; sources Zephyr menu.
+source "Kconfig.zephyr"
+
+# RS485 DE (patch shell_uart.c; options here so prj.conf can set them)
+config SHELL_BACKEND_SERIAL_RS485_DE
+	bool "Shell UART RS485 DE GPIO control (HIGH before TX, LOW after)"
+	default n
+	depends on SHELL_BACKEND_SERIAL && GPIO
+
+config SHELL_RS485_DE_GPIO_PIN
+	int "RS485 DE GPIO pin (e.g. 21 = P0.21)"
+	default 21
+	depends on SHELL_BACKEND_SERIAL_RS485_DE
+
+config SHELL_RS485_DE_OFF_DELAY_MS
+	int "Delay (ms) before DE goes LOW after TX"
+	default 1
+	range 0 10
+	depends on SHELL_BACKEND_SERIAL_RS485_DE
+	help
+	  Wait for UART to finish shifting last byte(s). Increase if PuTTY shows missing chars.
+
+config SHELL_RS485_DE_ON_DELAY_US
+	int "Delay (us) after DE HIGH before first TX byte"
+	default 250
+	range 0 1000
+	depends on SHELL_BACKEND_SERIAL_RS485_DE
+	help
+	  Wait for transceiver to drive before sending. Fixes "art:~$" -> "uart:~$".
+
+config SHELL_RS485_DE_MAX_HIGH_MS
+	int "Max time (ms) DE stays HIGH; force LOW after to allow RX (Enter)"
+	default 10
+	range 5 50
+	depends on SHELL_BACKEND_SERIAL_RS485_DE
+	help
+	  Safety: force DE low after this time so device can receive (e.g. Enter key).
