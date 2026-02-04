@@ -8,7 +8,6 @@
  * boot message DE.
  */
 
-#include <zephyr/devicetree.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
