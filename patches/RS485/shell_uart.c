@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <string.h>
 #include <zephyr/sys/ring_buffer.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/mgmt/mcumgr/transport/smp_shell.h>
@@ -210,18 +211,31 @@ static void uart_tx_handle(const struct device *dev, struct shell_uart_int_drive
 		ARG_UNUSED(err);
 	} else {
 #ifdef CONFIG_SHELL_BACKEND_SERIAL_RS485_DE
-		NRF_UARTE_Type *uarte = (NRF_UARTE_Type *)DT_REG_ADDR(DT_CHOSEN(zephyr_shell_uart));
-
-		/* waiting for DMA moving */
-		while (!uarte->EVENTS_ENDTX) {
-			k_busy_wait(1); 
+		/* 根據實際設備獲取寄存器地址，而不是使用編譯時的 DT_CHOSEN */
+		/* 這允許動態切換 UART 設備 */
+		NRF_UARTE_Type *uarte = NULL;
+		
+		/* 根據設備名稱判斷是哪個 UART */
+		if (strstr(dev->name, "uart@40002000") != NULL) {
+			/* UART0 */
+			uarte = (NRF_UARTE_Type *)DT_REG_ADDR(DT_NODELABEL(uart0));
+		} else if (strstr(dev->name, "uart@40028000") != NULL) {
+			/* UART1 */
+			uarte = (NRF_UARTE_Type *)DT_REG_ADDR(DT_NODELABEL(uart1));
 		}
-		uarte->EVENTS_ENDTX = 0; 
+		
+		if (uarte != NULL) {
+			/* waiting for DMA moving */
+			while (!uarte->EVENTS_ENDTX) {
+				k_busy_wait(1); 
+			}
+			uarte->EVENTS_ENDTX = 0; 
 
-		k_busy_wait((uint32_t)CONFIG_SHELL_RS485_DE_OFF_DELAY_MS * 1000U);
-		key = irq_lock();
-		rs485_de_set(0);
-		irq_unlock(key);
+			k_busy_wait((uint32_t)CONFIG_SHELL_RS485_DE_OFF_DELAY_MS * 1000U);
+			key = irq_lock();
+			rs485_de_set(0);
+			irq_unlock(key);
+		}
 #endif
 		uart_irq_tx_disable(dev);
 		sh_uart->tx_busy = 0;
@@ -233,6 +247,17 @@ static void uart_tx_handle(const struct device *dev, struct shell_uart_int_drive
 static void uart_callback(const struct device *dev, void *user_data)
 {
 	struct shell_uart_int_driven *sh_uart = (struct shell_uart_int_driven *)user_data;
+
+	/* 安全檢查：確保 user_data 有效 */
+	if (sh_uart == NULL) {
+		return;
+	}
+
+	/* 安全檢查：確保設備指針匹配（防止切換過程中的競態條件） */
+	if (sh_uart->common.dev != dev) {
+		/* 設備不匹配，可能是切換過程中的舊中斷，忽略 */
+		return;
+	}
 
 	uart_irq_update(dev);
 
