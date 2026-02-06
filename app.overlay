@@ -62,6 +62,16 @@
     };
 };
 
+&gpio0 {
+    gpio-reserved-ranges = <0 2>, <6 1>, <8 3>;
+    status_led {
+        gpio-hog;
+        gpios = <17 GPIO_ACTIVE_LOW>;
+        output-high;
+        line-name = "Status LED EN";
+    };
+};
+
 / {
     chosen {
         zephyr,console = &uart0;
