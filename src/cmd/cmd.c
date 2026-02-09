@@ -7,6 +7,8 @@
 #include <zephyr/shell/shell.h>
 #include <zephyr/shell/shell_uart.h>
 
+#include "nfc_thread.h"
+
 LOG_MODULE_REGISTER(cmd);
 
 /* PCA9955B I2C 地址 (AD0-AD2 都接地 = 0x40) */
@@ -322,7 +324,42 @@ static int cmd_pca9955b_test(const struct shell* sh, size_t argc, char** argv) {
   return -EINVAL;
 }
 
+static int cmd_pn7160_test(const struct shell* sh, size_t argc, char** argv) {
+  if (argc < 2) {
+    shell_error(sh, "Usage: pn7160_test <cmd>");
+    shell_print(sh, "Commands:");
+    shell_print(sh, "  start          - Start PN7160 test");
+    shell_print(sh, "  stop          - Stop PN7160 test");
+    return -EINVAL;
+  }
+
+  if (strcmp(argv[1], "start") == 0) {
+    /* 確保線程已啟動 */
+    static bool thread_started = false;
+    if (!thread_started) {
+      start_nfc_thread();
+      thread_started = true;
+      k_msleep(10); /* 給線程一點時間啟動 */
+    }
+
+    if (!nfc_run_flag) {
+      nfc_run_flag = true;
+      k_sem_give(&nfc_start_sem);
+    }
+    return 0;
+
+  } else if (strcmp(argv[1], "stop") == 0) {
+    nfc_run_flag = false;
+    shell_print(sh, "[PN7150] Stopping...");
+    return 0;
+  } else {
+    shell_error(sh, "Unknown command: %s", argv[1]);
+    return -EINVAL;
+  }
+}
+
 SHELL_CMD_REGISTER(switch_uart, NULL, "Switch Shell backend UART",
                    cmd_switch_uart);
 SHELL_CMD_REGISTER(pca9955b_test, NULL, "PCA9955B LED driver test commands",
                    cmd_pca9955b_test);
+SHELL_CMD_REGISTER(PN7160_test, NULL, "PN7160 test commands", cmd_pn7160_test);
