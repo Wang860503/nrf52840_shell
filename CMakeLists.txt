@@ -7,12 +7,18 @@ project(hello_world)
 
 target_include_directories(app PRIVATE
     src/buzzer
+    src/radio_test
+)
+
+# Application sources
+FILE(GLOB app_sources src/*.c 
+                      src/cmd/*c
+                      src/buzzer/*.c 
+                      src/radio_test/*.c
 )
 
 target_sources(app PRIVATE 
-    src/main.c
-    src/cmd/cmd.c
-    src/buzzer/buzzer.c
+    ${app_sources}
 )
 
 target_compile_definitions(app PRIVATE 

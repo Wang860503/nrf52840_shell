@@ -12,11 +12,13 @@
 #include <zephyr/logging/log.h>
 
 #include "buzzer.h"
+#include "radio_test.h"
 
 LOG_MODULE_REGISTER(my_app);
 
 int main(void) {
   tone_powerup();
+  clock_init();
   LOG_INF("Senao Shell ready. Type 'help' for commands.\n");
 
   k_sleep(K_FOREVER);
