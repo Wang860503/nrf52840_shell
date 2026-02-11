@@ -48,8 +48,8 @@ enum PPI_TRIGGER_MODE {
 };
 
 void em4095_receiver(void);
-void em4095_gpio_init(void);
-void em4095_enable(void);
+int em4095_gpio_init(void);
+int em4095_enable(void);
 void em4095_gpio_sampling_disable(void);
 
 void em4095_shd_sleep(void);
@@ -59,6 +59,7 @@ void em4095_set_trigger_mode(enum PPI_TRIGGER_MODE mode);
 unsigned short em4095_clk_check(void);
 unsigned short em4095_demod_check(void);
 
+int em4095_timer3_init(void);
 void em4095_timer3_deinit(void);
 
 #endif /* #ifndef __em4095_H_ */

@@ -14,6 +14,7 @@
 #include "dtm_sem.h"
 #include "dtm_transport.h"
 #include "em4095.h"
+#include "em4095_sem.h"
 #include "nfc_thread.h"
 #include "radio_sem.h"
 LOG_MODULE_REGISTER(cmd);
@@ -426,6 +427,12 @@ static int cmd_dtm_test(const struct shell* sh, size_t argc, char** argv) {
       return 0;
     }
 
+    /* Check if EM4095 is running */
+    if (k_sem_count_get(&em4095_sem) == 0) {
+      shell_error(sh, "EM4095 is starting, Please close the EM4095.");
+      return 0;
+    }
+
     if (k_sem_take(&dtm_sem, K_NO_WAIT) != 0) {
       shell_error(sh, "DTM transport thread already running.");
       return 0;
@@ -489,8 +496,30 @@ static void em4095_thread_entry(void* p1, void* p2, void* p3) {
   ARG_UNUSED(p2);
   ARG_UNUSED(p3);
 
-  em4095_gpio_init();
-  em4095_enable();
+  const struct shell* sh = em4095_shell_ptr;
+  int err;
+
+  /* Initialize GPIO */
+  err = em4095_gpio_init();
+  if (err != 0) {
+    if (sh != NULL) {
+      shell_error(sh, "Failed to initialize EM4095 GPIO: %d", err);
+    }
+    k_sem_give(&em4095_sem);
+    return;
+  }
+
+  /* Enable EM4095 (initialize timer and PPI) */
+  err = em4095_enable();
+  if (err != 0) {
+    if (sh != NULL) {
+      shell_error(sh, "Failed to enable EM4095: %d", err);
+    }
+    k_sem_give(&em4095_sem);
+    return;
+  }
+
+  /* Main loop - only execute if initialization succeeded */
   for (;;) {
     em4095_receiver();
     k_msleep(10);
@@ -499,18 +528,40 @@ static void em4095_thread_entry(void* p1, void* p2, void* p3) {
 
 static int cmd_em4095_test(const struct shell* sh, size_t argc, char** argv) {
   if (strcmp(argv[0], "start") == 0) {
+    /* Check if radio_test is running */
+    if (k_sem_count_get(&radio_sem) == 0) {
+      shell_error(sh, "radio test is starting, Please close the radio test.");
+      return 0;
+    }
+
+    /* Check if DTM is running */
+    if (k_sem_count_get(&dtm_sem) == 0) {
+      shell_error(sh, "DTM is starting, Please close the DTM.");
+      return 0;
+    }
+
+    /* Take em4095_sem to indicate EM4095 is starting */
+    if (k_sem_take(&em4095_sem, K_NO_WAIT) != 0) {
+      shell_error(sh, "EM4095 is already running.");
+      return 0;
+    }
+
     /* Save shell pointer for thread */
     em4095_shell_ptr = sh;
 
-    /* Start DTM transport thread */
-    /* The thread will call dtm_tr_init() (which calls dtm_init()) and then
-     * dtm_start() */
+    /* Start EM4095 thread */
     k_thread_create(&em4095_thread_data, em4095_thread_stack,
                     K_THREAD_STACK_SIZEOF(em4095_thread_stack),
                     em4095_thread_entry, NULL, NULL, NULL, K_PRIO_COOP(7), 0,
                     K_NO_WAIT);
     k_thread_name_set(&em4095_thread_data, "em4095_card_reader");
   } else if (strcmp(argv[0], "stop") == 0) {
+    /* Check if thread is running */
+    if (k_sem_count_get(&em4095_sem) != 0) {
+      shell_warn(sh, "EM4095 thread is not running");
+      return 0;
+    }
+
     k_thread_abort(&em4095_thread_data);
 
     /* Wait a bit for thread to finish */
@@ -521,6 +572,7 @@ static int cmd_em4095_test(const struct shell* sh, size_t argc, char** argv) {
 
     /* Uninitialize EM4095 timer3 and free resources (timer, PPI channel) */
     em4095_timer3_deinit();
+    k_sem_give(&em4095_sem);
     shell_print(sh, "EM4095 Set Sleep mode");
   } else {
     shell_error(sh, "Usage: em4095_test <cmd>");

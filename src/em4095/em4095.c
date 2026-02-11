@@ -36,6 +36,8 @@
 */
 #include "em4095.h"
 
+K_SEM_DEFINE(em4095_sem, 1, 1);
+
 unsigned short sync_flag,  // in the sync routine if this flag is set
     one_seq,               // counts the number of 'logic one' in series
     data_in,     // gets data bit depending on data_in_1st and data_in_2nd
@@ -266,7 +268,7 @@ void em4095_gpio_sampling_disable(void) {
   nrfx_gpiote_trigger_disable(&m_gpiote, demod_out_gpio.pin);
 }
 
-void em4095_timer3_init(void) {
+int em4095_timer3_init(void) {
   nrfx_err_t err_code = NRFX_SUCCESS;
 
   /* 1. Timer Init */
@@ -277,12 +279,14 @@ void em4095_timer3_init(void) {
       nrfx_timer_init(&TIMER_EM4095, &timer_cfg, em4095_timer_event_handle);
   if (err_code != NRFX_SUCCESS) {
     printk("Error: nrfx_timer_init fail code: %d\n", err_code);
+    return -EIO;
   }
 
   /* 2. PPI Alloc */
   err_code = nrfx_ppi_channel_alloc(&m_ppi_channel);
   if (err_code != NRFX_SUCCESS) {
     printk("Error: PPI alloc failed\n");
+    return -EIO;
   }
 
   /* 3. GPIOTE Init (Handle Already Initialized) */
@@ -301,7 +305,7 @@ void em4095_timer3_init(void) {
   err_code = nrfx_gpiote_channel_alloc(&m_gpiote, &ch_index);
   if (err_code != NRFX_SUCCESS) {
     printk("Error: GPIOTE Channel Alloc Failed! Code: %d\n", err_code);
-    return;
+    return -EIO;
   }
 
   /* 5. 【關鍵修正】先 Uninit Pin，清除 Zephyr 狀態 */
@@ -332,6 +336,7 @@ void em4095_timer3_init(void) {
       nrfx_gpiote_input_configure(&m_gpiote, demod_out_gpio.pin, &input_config);
   if (err_code != NRFX_SUCCESS) {
     printk("Error: Input Configure failed: 0x%08X\n", err_code);
+    return -EIO;
   }
 
   /* 8. 【關鍵修正】改用 HAL 直接啟用 Trigger */
@@ -365,6 +370,7 @@ void em4095_timer3_init(void) {
   irq_enable(TIMER3_IRQn);
 
   printk("EM4095 Timer3 & PPI Initialized Success\n");
+  return 0;
 }
 
 void em4095_timer3_deinit(void) {
@@ -715,14 +721,14 @@ unsigned short em4095_hid_receiver(void) {
 
 #endif /* #ifdef EM4095_FSK_DETECTION */
 
-void em4095_gpio_init(void) {
+int em4095_gpio_init(void) {
   int ret;
   nrfx_err_t err_code = NRFX_SUCCESS;
 
   if (!gpio_is_ready_dt(&demod_out_gpio) || !gpio_is_ready_dt(&shd_gpio) ||
       !gpio_is_ready_dt(&clk_gpio)) {
     printk("Error: EM4095 GPIOs not ready\n");
-    return;
+    return -EIO;
   }
 
 #ifdef EM4095_FSK_DETECTION
@@ -749,6 +755,7 @@ void em4095_gpio_init(void) {
 
 #endif /* #ifdef EM4095_SHD_WORKAROUND */
   printk("EM4095 GPIO Initialized\n");
+  return 0;
 }
 
 static void em4095_reset(void) {
@@ -802,12 +809,16 @@ void em4095_shd_emit_rf(void) {
 #endif /* #ifdef EM4095_SHD_WORKAROUND */
 }
 
-void em4095_enable(void) {
+int em4095_enable(void) {
 #ifdef EM4095_FSK_DETECTION
   // NRF_LOG_INFO("em4095 em4095_timer3_init!!");
-  em4095_timer3_init();
+  int err = em4095_timer3_init();
+  if (err != 0) {
+    return err;
+  }
 #endif /* #ifdef EM4095_FSK_DETECTION */
   em4095_shd_emit_rf();
+  return 0;
 }
 
 char CRC_Check(char* bit_array) {

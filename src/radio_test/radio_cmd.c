@@ -18,6 +18,7 @@
 #endif /* CONFIG_FEM */
 
 #include "dtm_sem.h"
+#include "em4095_sem.h"
 #include "radio_sem.h"
 #include "radio_test.h"
 
@@ -210,6 +211,10 @@ static int cmd_tx_carrier_start(const struct shell* shell, size_t argc,
     shell_error(shell, "DTM is starting, Please close the DTM.");
     return -1;
   }
+  if (k_sem_count_get(&em4095_sem) == 0) {
+    shell_error(shell, "EM4095 is starting, Please close the EM4095.");
+    return -1;
+  }
   if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
     shell_error(shell, "radio test is starting.");
     return -1;
@@ -278,6 +283,10 @@ static int cmd_tx_modulated_carrier_start(const struct shell* shell,
     shell_error(shell, "DTM is starting, Please close the DTM.");
     return -1;
   }
+  if (k_sem_count_get(&em4095_sem) == 0) {
+    shell_error(shell, "EM4095 is starting, Please close the EM4095.");
+    return -1;
+  }
 
   if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
     shell_error(shell, "radio test is starting.");
@@ -325,6 +334,10 @@ static int cmd_duty_cycle_set(const struct shell* shell, size_t argc,
 
   if (k_sem_count_get(&dtm_sem) == 0) {
     shell_error(shell, "DTM is starting, Please close the DTM.");
+    return -1;
+  }
+  if (k_sem_count_get(&em4095_sem) == 0) {
+    shell_error(shell, "EM4095 is starting, Please close the EM4095.");
     return -1;
   }
 
@@ -575,6 +588,10 @@ static int cmd_rx_sweep_start(const struct shell* shell, size_t argc,
     shell_error(shell, "DTM is starting, Please close the DTM.");
     return -1;
   }
+  if (k_sem_count_get(&em4095_sem) == 0) {
+    shell_error(shell, "EM4095 is starting, Please close the EM4095.");
+    return -1;
+  }
 
   if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
     shell_error(shell, "radio test is starting.");
@@ -605,6 +622,10 @@ static int cmd_tx_sweep_start(const struct shell* shell, size_t argc,
     shell_error(shell, "DTM is starting, Please close the DTM.");
     return -1;
   }
+  if (k_sem_count_get(&em4095_sem) == 0) {
+    shell_error(shell, "EM4095 is starting, Please close the EM4095.");
+    return -1;
+  }
 
   if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
     shell_error(shell, "radio test is starting.");
@@ -633,6 +654,10 @@ static int cmd_tx_sweep_start(const struct shell* shell, size_t argc,
 static int cmd_rx_start(const struct shell* shell, size_t argc, char** argv) {
   if (k_sem_count_get(&dtm_sem) == 0) {
     shell_error(shell, "DTM is starting, Please close the DTM.");
+    return -1;
+  }
+  if (k_sem_count_get(&em4095_sem) == 0) {
+    shell_error(shell, "EM4095 is starting, Please close the EM4095.");
     return -1;
   }
 
