@@ -17,6 +17,8 @@
 #include "fem_al/fem_al.h"
 #endif /* CONFIG_FEM */
 
+#include "dtm_sem.h"
+#include "radio_sem.h"
 #include "radio_test.h"
 
 #if NRF_POWER_HAS_DCDCEN_VDDH
@@ -178,6 +180,7 @@ static int cmd_time_set(const struct shell* shell, size_t argc, char** argv) {
 static int cmd_cancel(const struct shell* shell, size_t argc, char** argv) {
   radio_test_cancel(test_config.type);
   test_in_progress = false;
+  k_sem_give(&radio_sem);
   return 0;
 }
 
@@ -203,6 +206,15 @@ static int cmd_data_rate_set(const struct shell* shell, size_t argc,
 
 static int cmd_tx_carrier_start(const struct shell* shell, size_t argc,
                                 char** argv) {
+  if (k_sem_count_get(&dtm_sem) == 0) {
+    shell_error(shell, "DTM is starting, Please close the DTM.");
+    return -1;
+  }
+  if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
+    shell_error(shell, "radio test is starting.");
+    return -1;
+  }
+
   if (test_in_progress) {
     radio_test_cancel(test_config.type);
     test_in_progress = false;
@@ -262,6 +274,16 @@ static void rx_end(void) {
 
 static int cmd_tx_modulated_carrier_start(const struct shell* shell,
                                           size_t argc, char** argv) {
+  if (k_sem_count_get(&dtm_sem) == 0) {
+    shell_error(shell, "DTM is starting, Please close the DTM.");
+    return -1;
+  }
+
+  if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
+    shell_error(shell, "radio test is starting.");
+    return -1;
+  }
+
   if (test_in_progress) {
     radio_test_cancel(test_config.type);
     test_in_progress = false;
@@ -300,6 +322,16 @@ static int cmd_tx_modulated_carrier_start(const struct shell* shell,
 static int cmd_duty_cycle_set(const struct shell* shell, size_t argc,
                               char** argv) {
   uint32_t duty_cycle;
+
+  if (k_sem_count_get(&dtm_sem) == 0) {
+    shell_error(shell, "DTM is starting, Please close the DTM.");
+    return -1;
+  }
+
+  if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
+    shell_error(shell, "radio test is starting.");
+    return -1;
+  }
 
   if (argc == 1) {
     shell_help(shell);
@@ -539,6 +571,16 @@ static int cmd_print(const struct shell* shell, size_t argc, char** argv) {
 
 static int cmd_rx_sweep_start(const struct shell* shell, size_t argc,
                               char** argv) {
+  if (k_sem_count_get(&dtm_sem) == 0) {
+    shell_error(shell, "DTM is starting, Please close the DTM.");
+    return -1;
+  }
+
+  if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
+    shell_error(shell, "radio test is starting.");
+    return -1;
+  }
+
   memset(&test_config, 0, sizeof(test_config));
   test_config.type = RX_SWEEP;
   test_config.mode = config.mode;
@@ -559,6 +601,16 @@ static int cmd_rx_sweep_start(const struct shell* shell, size_t argc,
 
 static int cmd_tx_sweep_start(const struct shell* shell, size_t argc,
                               char** argv) {
+  if (k_sem_count_get(&dtm_sem) == 0) {
+    shell_error(shell, "DTM is starting, Please close the DTM.");
+    return -1;
+  }
+
+  if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
+    shell_error(shell, "radio test is starting.");
+    return -1;
+  }
+
   memset(&test_config, 0, sizeof(test_config));
   test_config.type = TX_SWEEP;
   test_config.mode = config.mode;
@@ -579,6 +631,16 @@ static int cmd_tx_sweep_start(const struct shell* shell, size_t argc,
 }
 
 static int cmd_rx_start(const struct shell* shell, size_t argc, char** argv) {
+  if (k_sem_count_get(&dtm_sem) == 0) {
+    shell_error(shell, "DTM is starting, Please close the DTM.");
+    return -1;
+  }
+
+  if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
+    shell_error(shell, "radio test is starting.");
+    return -1;
+  }
+
   if (test_in_progress) {
     radio_test_cancel(test_config.type);
     test_in_progress = false;

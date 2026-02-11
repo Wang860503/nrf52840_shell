@@ -5,6 +5,13 @@
  */
 
 #include "dtm.h"
+#include "dtm_sem.h"
+
+/* Define dtm_sem here to avoid multiple definition errors */
+/* Initial count is 1, meaning no DTM is running */
+/* When DTM starts, semaphore is taken (count becomes 0) */
+/* When DTM stops, semaphore is given (count becomes 1) */
+K_SEM_DEFINE(dtm_sem, 1, 1);
 
 #include <stdlib.h>
 #include <string.h>

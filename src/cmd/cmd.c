@@ -8,8 +8,10 @@
 #include <zephyr/shell/shell_uart.h>
 
 #include "dtm.h"
+#include "dtm_sem.h"
 #include "dtm_transport.h"
 #include "nfc_thread.h"
+#include "radio_sem.h"
 LOG_MODULE_REGISTER(cmd);
 
 /* PCA9955B I2C 地址 (AD0-AD2 都接地 = 0x40) */
@@ -363,7 +365,6 @@ static int cmd_pn7160_test(const struct shell* sh, size_t argc, char** argv) {
 static struct k_thread dtm_thread_data;
 static K_THREAD_STACK_DEFINE(dtm_thread_stack, 2048);
 static const struct shell* dtm_shell_ptr = NULL;
-static bool dtm_thread_running = false;
 
 static void dtm_thread_entry(void* p1, void* p2, void* p3) {
   ARG_UNUSED(p1);
@@ -379,7 +380,7 @@ static void dtm_thread_entry(void* p1, void* p2, void* p3) {
     if (sh != NULL) {
       shell_print(sh, "Error initializing DTM transport: %d\n", err);
     }
-    dtm_thread_running = false;
+    k_sem_give(&dtm_sem);
     return;
   }
 
@@ -389,7 +390,7 @@ static void dtm_thread_entry(void* p1, void* p2, void* p3) {
     if (sh != NULL) {
       shell_error(sh, "Failed to start DTM: %d", err);
     }
-    dtm_thread_running = false;
+    k_sem_give(&dtm_sem);
     return;
   }
 
@@ -422,15 +423,20 @@ static int cmd_dtm_test(const struct shell* sh, size_t argc, char** argv) {
   }
 
   if (strcmp(argv[1], "start") == 0) {
-    if (dtm_thread_running) {
-      shell_print(sh, "DTM transport thread already running");
+    if (k_sem_count_get(&radio_sem) == 0) {
+      shell_error(sh, "radio test is starting, Please close the radio test.");
       return 0;
     }
+
+    if (k_sem_take(&dtm_sem, K_NO_WAIT) != 0) {
+      shell_error(sh, "DTM transport thread already running.");
+      return 0;
+    }
+
     shell_print(sh, "Starting DTM transport...");
 
     /* Save shell pointer for thread */
     dtm_shell_ptr = sh;
-    dtm_thread_running = true;
 
     /* Start DTM transport thread */
     /* The thread will call dtm_tr_init() (which calls dtm_init()) and then
@@ -440,8 +446,8 @@ static int cmd_dtm_test(const struct shell* sh, size_t argc, char** argv) {
                     NULL, NULL, NULL, K_PRIO_COOP(7), 0, K_NO_WAIT);
     k_thread_name_set(&dtm_thread_data, "dtm_transport");
   } else if (strcmp(argv[1], "stop") == 0) {
-    if (!dtm_thread_running) {
-      shell_print(sh, "DTM transport thread is not running");
+    if (k_sem_count_get(&dtm_sem) != 0) {
+      shell_warn(sh, "DTM transport thread is not running");
       return 0;
     }
 
@@ -455,12 +461,12 @@ static int cmd_dtm_test(const struct shell* sh, size_t argc, char** argv) {
 
     /* Abort the DTM transport thread */
     k_thread_abort(&dtm_thread_data);
-    
+
     /* Wait a bit for thread to finish */
     k_msleep(100);
-    
+
     /* Reset thread state */
-    dtm_thread_running = false;
+    k_sem_give(&dtm_sem);
     dtm_shell_ptr = NULL;
 
     shell_print(sh, "DTM transport stopped");

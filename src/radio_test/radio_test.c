@@ -5,6 +5,13 @@
  */
 
 #include "radio_test.h"
+#include "radio_sem.h"
+
+/* Define radio_sem here to avoid multiple definition errors */
+/* Initial count is 1, meaning no radio_test is running */
+/* When radio_test starts, semaphore is taken (count becomes 0) */
+/* When radio_test stops, semaphore is given (count becomes 1) */
+K_SEM_DEFINE(radio_sem, 1, 1);
 
 #include <string.h>
 #include <inttypes.h>
