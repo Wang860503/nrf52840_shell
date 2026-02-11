@@ -38,19 +38,19 @@ static int cmd_switch_uart(const struct shell* sh, size_t argc, char** argv) {
   const struct shell_transport* transport = sh->iface;
   const struct device* old_dev = common->dev;
 
-  if (argc <= 1) {
-    shell_error(sh, "Usage: switch_uart <0|1>");
-    return -EINVAL;
-  }
-
-  if (strcmp(argv[1], "0") == 0) {
-    new_dev = DEVICE_DT_GET(DT_NODELABEL(uart0));
-    shell_print(sh, "Switching to UART0...");
-  } else if (strcmp(argv[1], "1") == 0) {
-    new_dev = DEVICE_DT_GET(DT_NODELABEL(uart1));
-    shell_print(sh, "Switching to UART1...");
+  if (strcmp(argv[0], "set") == 0) {
+    if (strcmp(argv[1], "0") == 0) {
+      new_dev = DEVICE_DT_GET(DT_NODELABEL(uart0));
+      shell_print(sh, "Switching to UART0...");
+    } else if (strcmp(argv[1], "1") == 0) {
+      new_dev = DEVICE_DT_GET(DT_NODELABEL(uart1));
+      shell_print(sh, "Switching to UART1...");
+    } else {
+      shell_error(sh, "Usage: switch_uart set <0|1>");
+      return -EINVAL;
+    }
   } else {
-    shell_error(sh, "Usage: switch_uart <0|1>");
+    shell_error(sh, "Usage: switch_uart set <0|1>");
     return -EINVAL;
   }
 
@@ -147,26 +147,17 @@ static int cmd_switch_uart(const struct shell* sh, size_t argc, char** argv) {
 static bool pca9955b_init = false;
 static int cmd_pca9955b_test(const struct shell* sh, size_t argc, char** argv) {
   const struct device* i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c1));
+  bool valid = false;
+  int channels[] = {0, 9, 11, 12, 15};
+  const char* names[] = {"White(Middle)", "White(Top)", "Green(Top)",
+                         "Red(Top)", "Red(Middle)"};
 
   if (!device_is_ready(i2c_dev)) {
     shell_error(sh, "I2C device not ready!");
     return -ENODEV;
   }
 
-  if (argc < 2) {
-    shell_error(sh, "Usage: pca9955b_test <cmd> [args]");
-    shell_print(sh, "Commands:");
-    shell_print(sh, "  init          - Initialize PCA9955B");
-    shell_print(sh,
-                "  led <ch> <brightness> - Set LED channel (1,12,13,14,15) "
-                "brightness (0-255)");
-    shell_print(sh, "  all <brightness> - Set all LEDs brightness (0-255)");
-    shell_print(sh, "  off            - Turn off all LEDs");
-    shell_print(sh, "  demo           - Run LED demo");
-    return -EINVAL;
-  }
-
-  if (strcmp(argv[1], "init") == 0) {
+  if (strcmp(argv[0], "init") == 0) {
     shell_print(sh, "Initializing PCA9955B...");
     uint8_t buf[2];
 
@@ -206,15 +197,27 @@ static int cmd_pca9955b_test(const struct shell* sh, size_t argc, char** argv) {
     return -ECANCELED;
   }
 
-  if (strcmp(argv[1], "led") == 0) {
-    if (argc < 4) {
+  if (strcmp(argv[0], "led") == 0) {
+    if (argc < 3) {
       shell_error(sh, "Usage: pca9955b_test led <ch> <brightness>");
       shell_print(sh, "  ch: 0, 9, 11, 12, 15");
       shell_print(sh, "  brightness: 0-255");
       return -EINVAL;
     }
-    int ch = atoi(argv[2]);
-    int brightness = atoi(argv[3]);
+    int ch = atoi(argv[1]);
+    int brightness = atoi(argv[2]);
+
+    for (int i = 0; i < ARRAY_SIZE(channels); i++) {
+      if (ch == channels[i]) {
+        valid = true;
+        break;
+      }
+    }
+
+    if (!valid) {
+      shell_error(sh, "Invalid channel!");
+      return -EINVAL;
+    }
 
     if (brightness < 0) brightness = 0;
     if (brightness > 255) brightness = 255;
@@ -231,17 +234,17 @@ static int cmd_pca9955b_test(const struct shell* sh, size_t argc, char** argv) {
     return 0;
   }
 
-  if (strcmp(argv[1], "all") == 0) {
-    if (argc < 3) {
+  if (strcmp(argv[0], "all") == 0) {
+    if (argc < 2) {
       shell_error(sh, "Usage: pca9955b_test all <brightness>");
       return -EINVAL;
     }
-    int brightness = atoi(argv[2]);
+    int brightness = atoi(argv[1]);
     if (brightness < 0) brightness = 0;
     if (brightness > 255) brightness = 255;
 
     uint8_t buf[2];
-    int channels[] = {0, 9, 11, 12, 15};
+
     for (int i = 0; i < 5; i++) {
       buf[0] = PCA9955B_REG_PWM0 + channels[i];
       buf[1] = (uint8_t)brightness;
@@ -251,9 +254,9 @@ static int cmd_pca9955b_test(const struct shell* sh, size_t argc, char** argv) {
     return 0;
   }
 
-  if (strcmp(argv[1], "off") == 0) {
+  if (strcmp(argv[0], "off") == 0) {
     uint8_t buf[2];
-    int channels[] = {0, 9, 11, 12, 15};
+
     for (int i = 0; i < 5; i++) {
       buf[0] = PCA9955B_REG_PWM0 + channels[i];
       buf[1] = 0;
@@ -263,7 +266,7 @@ static int cmd_pca9955b_test(const struct shell* sh, size_t argc, char** argv) {
     return 0;
   }
 
-  if (strcmp(argv[1], "demo") == 0) {
+  if (strcmp(argv[0], "demo") == 0) {
     shell_print(sh, "Running LED demo...");
     uint8_t buf[2];
 
@@ -289,10 +292,6 @@ static int cmd_pca9955b_test(const struct shell* sh, size_t argc, char** argv) {
     k_msleep(100);
 
     /* 依次點亮每個 LED */
-    int channels[] = {0, 9, 11, 12, 15};
-    const char* names[] = {"White(Middle)", "White(Top)", "Green(Top)",
-                           "Red(Top)", "Red(Middle)"};
-
     for (int i = 0; i < 5; i++) {
       shell_print(sh, "LED%d (%s)", channels[i], names[i]);
       buf[0] = PCA9955B_REG_PWM0 + channels[i];
@@ -323,20 +322,20 @@ static int cmd_pca9955b_test(const struct shell* sh, size_t argc, char** argv) {
     return 0;
   }
 
-  shell_error(sh, "Unknown command: %s", argv[1]);
+  shell_error(sh, "Usage: pca9955b_test <cmd> [args]");
+  shell_print(sh, "Commands:");
+  shell_print(sh, "  init          - Initialize PCA9955B");
+  shell_print(sh,
+              "  led <ch> <brightness> - Set LED channel (1,12,13,14,15) "
+              "brightness (0-255)");
+  shell_print(sh, "  all <brightness> - Set all LEDs brightness (0-255)");
+  shell_print(sh, "  off            - Turn off all LEDs");
+  shell_print(sh, "  demo           - Run LED demo");
   return -EINVAL;
 }
 
 static int cmd_pn7160_test(const struct shell* sh, size_t argc, char** argv) {
-  if (argc < 2) {
-    shell_error(sh, "Usage: pn7160_test <cmd>");
-    shell_print(sh, "Commands:");
-    shell_print(sh, "  start          - Start PN7160 test");
-    shell_print(sh, "  stop          - Stop PN7160 test");
-    return -EINVAL;
-  }
-
-  if (strcmp(argv[1], "start") == 0) {
+  if (strcmp(argv[0], "start") == 0) {
     /* 確保線程已啟動 */
     static bool thread_started = false;
     if (!thread_started) {
@@ -351,12 +350,15 @@ static int cmd_pn7160_test(const struct shell* sh, size_t argc, char** argv) {
     }
     return 0;
 
-  } else if (strcmp(argv[1], "stop") == 0) {
+  } else if (strcmp(argv[0], "stop") == 0) {
     nfc_run_flag = false;
     shell_print(sh, "[PN7150] Stopping...");
     return 0;
   } else {
-    shell_error(sh, "Unknown command: %s", argv[1]);
+    shell_error(sh, "Usage: pn7160_test <cmd>");
+    shell_print(sh, "Commands:");
+    shell_print(sh, "  start          - Start PN7160 test");
+    shell_print(sh, "  stop          - Stop PN7160 test");
     return -EINVAL;
   }
 }
@@ -414,15 +416,7 @@ static void dtm_thread_entry(void* p1, void* p2, void* p3) {
 }
 
 static int cmd_dtm_test(const struct shell* sh, size_t argc, char** argv) {
-  if (argc < 2) {
-    shell_error(sh, "Usage: pn7160_test <cmd>");
-    shell_print(sh, "Commands:");
-    shell_print(sh, "  start          - Start PN7160 test");
-    shell_print(sh, "  stop          - Stop PN7160 test");
-    return -EINVAL;
-  }
-
-  if (strcmp(argv[1], "start") == 0) {
+  if (strcmp(argv[0], "start") == 0) {
     if (k_sem_count_get(&radio_sem) == 0) {
       shell_error(sh, "radio test is starting, Please close the radio test.");
       return 0;
@@ -445,7 +439,7 @@ static int cmd_dtm_test(const struct shell* sh, size_t argc, char** argv) {
                     K_THREAD_STACK_SIZEOF(dtm_thread_stack), dtm_thread_entry,
                     NULL, NULL, NULL, K_PRIO_COOP(7), 0, K_NO_WAIT);
     k_thread_name_set(&dtm_thread_data, "dtm_transport");
-  } else if (strcmp(argv[1], "stop") == 0) {
+  } else if (strcmp(argv[0], "stop") == 0) {
     if (k_sem_count_get(&dtm_sem) != 0) {
       shell_warn(sh, "DTM transport thread is not running");
       return 0;
@@ -471,18 +465,75 @@ static int cmd_dtm_test(const struct shell* sh, size_t argc, char** argv) {
 
     shell_print(sh, "DTM transport stopped");
   } else {
-    shell_error(sh, "Unknown command: %s", argv[1]);
+    shell_error(sh, "Usage: pn7160_test <cmd>");
+    shell_print(sh, "Commands:");
+    shell_print(sh, "  start          - Start PN7160 test");
+    shell_print(sh, "  stop          - Stop PN7160 test");
     return -EINVAL;
   }
 
   return 0;
 }
 
-SHELL_CMD_REGISTER(switch_uart, NULL, "Switch Shell backend UART",
+static int cmd_em4095_test(const struct shell* sh, size_t argc, char** argv) {
+  if (strcmp(argv[0], "start") == 0) {
+    shell_print(sh, "EM4095 Start logic here...");
+  } else if (strcmp(argv[0], "stop") == 0) {
+    shell_print(sh, "EM4095 Stop logic here...");
+  } else {
+    shell_error(sh, "Usage: em4095_test <cmd>");
+    shell_print(sh, "Commands:");
+    shell_print(sh, "  start          - Start PN7160 test");
+    shell_print(sh, "  stop          - Stop PN7160 test");
+    return -EINVAL;
+  }
+  return 0;
+}
+
+/*SWITCH UART cmd*/
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_switch_uart,
+                               SHELL_CMD_ARG(set, NULL, "Set Shell uart",
+                                             cmd_switch_uart, 1, 1),
+                               SHELL_SUBCMD_SET_END);
+SHELL_CMD_REGISTER(switch_uart, &sub_switch_uart, "Switch Shell backend UART",
                    cmd_switch_uart);
-SHELL_CMD_REGISTER(pca9955b_test, NULL, "PCA9955B LED driver test commands",
-                   cmd_pca9955b_test);
-SHELL_CMD_REGISTER(PN7160_test, NULL, "PN7160 test commands", cmd_pn7160_test);
-SHELL_CMD_REGISTER(dtm_test, NULL,
+/*PCA9955B cmd*/
+SHELL_STATIC_SUBCMD_SET_CREATE(
+    sub_pca9955b,
+    SHELL_CMD_ARG(init, NULL, "Initial PCA9955B", cmd_pca9955b_test, 1, 0),
+    SHELL_CMD_ARG(led, NULL,
+                  "Set LED channel (1,12,13,14,15) brightness (0-255)",
+                  cmd_pca9955b_test, 1, 2),
+    SHELL_CMD_ARG(all, NULL, "Set all LEDs brightness (0-255)",
+                  cmd_pca9955b_test, 1, 1),
+    SHELL_CMD_ARG(off, NULL, "Turn off all LEDs", cmd_pca9955b_test, 1, 0),
+    SHELL_CMD_ARG(demo, NULL, "Run LED demo", cmd_pca9955b_test, 1, 0),
+    SHELL_SUBCMD_SET_END);
+SHELL_CMD_REGISTER(pca9955b_test, &sub_pca9955b,
+                   "PCA9955B LED driver test commands", cmd_pca9955b_test);
+/*PN7160 cmd*/
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_pn7160,
+                               SHELL_CMD_ARG(start, NULL, "Start PN7160 test",
+                                             cmd_pn7160_test, 1, 0),
+                               SHELL_CMD_ARG(stop, NULL, "Stop PN7160 test",
+                                             cmd_pn7160_test, 1, 0),
+                               SHELL_SUBCMD_SET_END);
+SHELL_CMD_REGISTER(PN7160_test, &sub_pn7160, "PN7160 test commands",
+                   cmd_pn7160_test);
+/*DTM cmd*/
+SHELL_STATIC_SUBCMD_SET_CREATE(
+    sub_dtm, SHELL_CMD_ARG(start, NULL, "Start DTM", cmd_dtm_test, 1, 0),
+    SHELL_CMD_ARG(stop, NULL, "Stop DTM", cmd_dtm_test, 1, 0),
+    SHELL_SUBCMD_SET_END);
+SHELL_CMD_REGISTER(dtm_test, &sub_dtm,
                    "Start DTM (initialize Radio and connect interrupts)",
                    cmd_dtm_test);
+/*EM4095 cmd*/
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_em4095,
+                               SHELL_CMD_ARG(start, NULL, "Start EM4095 test",
+                                             cmd_em4095_test, 1, 0),
+                               SHELL_CMD_ARG(stop, NULL, "Stop EM4095 test",
+                                             cmd_em4095_test, 1, 0),
+                               SHELL_SUBCMD_SET_END);
+SHELL_CMD_REGISTER(em4095_test, &sub_em4095, "EM4095 test commands",
+                   cmd_em4095_test);
