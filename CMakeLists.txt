@@ -31,6 +31,7 @@ target_include_directories(app PRIVATE
     src/pn7160/NfcLibrary_NCI2.0/NdefLibrary/inc
     src/dtm/
     src/dtm/transport
+    src/em4095/
 )
 
 # Application sources
@@ -44,6 +45,7 @@ FILE(GLOB app_sources
     src/pn7160/NfcLibrary_NCI2.0/NxpNci20/src/*.c
     src/pn7160/NfcLibrary_NCI2.0/NdefLibrary/src/*.c
     src/dtm/*.c
+    src/em4095/*.c
 )
 
 target_sources(app PRIVATE 

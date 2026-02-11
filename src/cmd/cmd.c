@@ -1,7 +1,10 @@
+#include <nrfx_ppi.h>
+#include <nrfx_timer.h>
 #include <stdlib.h>
 #include <string.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/uart.h>
+#include <zephyr/irq.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/shell/shell.h>
@@ -10,6 +13,7 @@
 #include "dtm.h"
 #include "dtm_sem.h"
 #include "dtm_transport.h"
+#include "em4095.h"
 #include "nfc_thread.h"
 #include "radio_sem.h"
 LOG_MODULE_REGISTER(cmd);
@@ -475,11 +479,49 @@ static int cmd_dtm_test(const struct shell* sh, size_t argc, char** argv) {
   return 0;
 }
 
+/* EM4095 detect thread */
+static struct k_thread em4095_thread_data;
+static K_THREAD_STACK_DEFINE(em4095_thread_stack, 2048);
+static const struct shell* em4095_shell_ptr = NULL;
+
+static void em4095_thread_entry(void* p1, void* p2, void* p3) {
+  ARG_UNUSED(p1);
+  ARG_UNUSED(p2);
+  ARG_UNUSED(p3);
+
+  em4095_gpio_init();
+  em4095_enable();
+  for (;;) {
+    em4095_receiver();
+    k_msleep(10);
+  }
+}
+
 static int cmd_em4095_test(const struct shell* sh, size_t argc, char** argv) {
   if (strcmp(argv[0], "start") == 0) {
-    shell_print(sh, "EM4095 Start logic here...");
+    /* Save shell pointer for thread */
+    em4095_shell_ptr = sh;
+
+    /* Start DTM transport thread */
+    /* The thread will call dtm_tr_init() (which calls dtm_init()) and then
+     * dtm_start() */
+    k_thread_create(&em4095_thread_data, em4095_thread_stack,
+                    K_THREAD_STACK_SIZEOF(em4095_thread_stack),
+                    em4095_thread_entry, NULL, NULL, NULL, K_PRIO_COOP(7), 0,
+                    K_NO_WAIT);
+    k_thread_name_set(&em4095_thread_data, "em4095_card_reader");
   } else if (strcmp(argv[0], "stop") == 0) {
-    shell_print(sh, "EM4095 Stop logic here...");
+    k_thread_abort(&em4095_thread_data);
+
+    /* Wait a bit for thread to finish */
+    k_msleep(100);
+
+    /*em4095 sleep mode*/
+    em4095_shd_sleep();
+
+    /* Uninitialize EM4095 timer3 and free resources (timer, PPI channel) */
+    em4095_timer3_deinit();
+    shell_print(sh, "EM4095 Set Sleep mode");
   } else {
     shell_error(sh, "Usage: em4095_test <cmd>");
     shell_print(sh, "Commands:");

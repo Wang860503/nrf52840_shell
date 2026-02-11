@@ -22,6 +22,14 @@
     status = "disabled";
 };
 
+&button0 {
+    status = "disabled";
+};
+
+&button1 {
+    status = "disabled";
+};
+
 &uart0 {
     status = "okay";
 };
@@ -172,7 +180,29 @@
         };
     };
 
+    em4095_gpio {
+        compatible = "gpio-keys";
+
+        demod_out: demodout{
+            gpios = <&gpio0 12 GPIO_ACTIVE_HIGH>;
+            label = "em4095 Demod out";
+        };
+
+        SHD: shd{
+            gpios = <&gpio1 9 GPIO_ACTIVE_HIGH>;
+            label = "em4095 SHD";
+        };
+
+        CLK: clk{
+            gpios = <&gpio0 11 GPIO_ACTIVE_HIGH>;
+            label = "em4095 CLK";
+        };
+    };
+
     aliases {
         pwmbuzzer = &buzzer_pwm;
+        em4095demodout = &demod_out;
+        em4095shd = &SHD;
+        em4095clk = &CLK;
     };
 };

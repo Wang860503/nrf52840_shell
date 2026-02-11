@@ -52,6 +52,6 @@ void tone_pn7150_remove(void) {
   tone_gen(392 * 8, 200);
   tone_gen(392 * 8, 200);
 }
-void tone_em4095_detected(void) {}
+void tone_em4095_detected(void) { tone_gen(392 * 10, 50); }
 void tone_em4095_failed(void) {}
 void tone_em4095_demod_failed(void) {}
