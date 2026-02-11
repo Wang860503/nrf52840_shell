@@ -226,6 +226,14 @@ void radio_test_start(const struct radio_test_config* config);
 void radio_test_cancel(enum radio_test_mode type);
 
 /**
+ * @brief Function for completely deinitializing radio_test and releasing timer.
+ * 
+ * This function should be called before switching to DTM mode to release
+ * the timer resource that is shared between radio_test and DTM.
+ */
+void radio_test_deinit(void);
+
+/**
  * @brief Function for get RX statistics.
  *
  * @param[out] rx_stats RX statistics.

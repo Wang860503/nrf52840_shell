@@ -5,6 +5,20 @@ cmake_minimum_required(VERSION 3.20.0)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(hello_world)
 
+target_sources_ifndef(CONFIG_DTM_TRANSPORT_HCI app PRIVATE
+  src/dtm/transport/dtm_uart_twowire.c
+  src/dtm/transport/dtm_uart_wait.c
+)
+
+target_sources_ifdef(CONFIG_DTM_TRANSPORT_HCI app PRIVATE src/dtm/transport/dtm_hci.c)
+
+if(CONFIG_DTM_TRANSPORT_HCI AND "${BOARD}" STREQUAL "nrf5340dk")
+  target_sources(app PRIVATE src/dtm/transport/hci_uart_remote.c)
+  target_include_directories(app PRIVATE ./rpc)
+else()
+  target_sources_ifdef(CONFIG_DTM_TRANSPORT_HCI app PRIVATE src/dtm/transport/hci_uart.c)
+endif()
+
 target_include_directories(app PRIVATE
     src/buzzer
     src/radio_test
@@ -15,6 +29,8 @@ target_include_directories(app PRIVATE
     src/pn7160/NfcLibrary_NCI2.0/inc
     src/pn7160/NfcLibrary_NCI2.0/NxpNci20/inc
     src/pn7160/NfcLibrary_NCI2.0/NdefLibrary/inc
+    src/dtm/
+    src/dtm/transport
 )
 
 # Application sources
@@ -27,6 +43,7 @@ FILE(GLOB app_sources
     src/pn7160/TML/src/*.c
     src/pn7160/NfcLibrary_NCI2.0/NxpNci20/src/*.c
     src/pn7160/NfcLibrary_NCI2.0/NdefLibrary/src/*.c
+    src/dtm/*.c
 )
 
 target_sources(app PRIVATE 

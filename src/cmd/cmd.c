@@ -7,8 +7,9 @@
 #include <zephyr/shell/shell.h>
 #include <zephyr/shell/shell_uart.h>
 
+#include "dtm.h"
+#include "dtm_transport.h"
 #include "nfc_thread.h"
-
 LOG_MODULE_REGISTER(cmd);
 
 /* PCA9955B I2C 地址 (AD0-AD2 都接地 = 0x40) */
@@ -358,8 +359,124 @@ static int cmd_pn7160_test(const struct shell* sh, size_t argc, char** argv) {
   }
 }
 
+/* DTM transport thread */
+static struct k_thread dtm_thread_data;
+static K_THREAD_STACK_DEFINE(dtm_thread_stack, 2048);
+static const struct shell* dtm_shell_ptr = NULL;
+static bool dtm_thread_running = false;
+
+static void dtm_thread_entry(void* p1, void* p2, void* p3) {
+  ARG_UNUSED(p1);
+  ARG_UNUSED(p2);
+  ARG_UNUSED(p3);
+
+  const struct shell* sh = dtm_shell_ptr;
+  int err;
+  union dtm_tr_packet cmd;
+
+  err = dtm_tr_init();
+  if (err) {
+    if (sh != NULL) {
+      shell_print(sh, "Error initializing DTM transport: %d\n", err);
+    }
+    dtm_thread_running = false;
+    return;
+  }
+
+  /* After dtm_tr_init() calls dtm_init(), now start DTM (initialize Radio) */
+  err = dtm_start();
+  if (err) {
+    if (sh != NULL) {
+      shell_error(sh, "Failed to start DTM: %d", err);
+    }
+    dtm_thread_running = false;
+    return;
+  }
+
+  if (sh != NULL) {
+    shell_print(sh, "DTM transport initialized successfully");
+    shell_print(sh, "Ready to receive commands");
+  }
+
+  for (;;) {
+    cmd = dtm_tr_get();
+    err = dtm_tr_process(cmd);
+    if (err) {
+      if (sh != NULL) {
+        shell_print(sh, "Error processing command: %d\n", err);
+        shell_print(sh, "Ready to receive commands");
+      }
+      /* Continue processing instead of returning to allow recovery */
+    }
+    k_msleep(10);
+  }
+}
+
+static int cmd_dtm_test(const struct shell* sh, size_t argc, char** argv) {
+  if (argc < 2) {
+    shell_error(sh, "Usage: pn7160_test <cmd>");
+    shell_print(sh, "Commands:");
+    shell_print(sh, "  start          - Start PN7160 test");
+    shell_print(sh, "  stop          - Stop PN7160 test");
+    return -EINVAL;
+  }
+
+  if (strcmp(argv[1], "start") == 0) {
+    if (dtm_thread_running) {
+      shell_print(sh, "DTM transport thread already running");
+      return 0;
+    }
+    shell_print(sh, "Starting DTM transport...");
+
+    /* Save shell pointer for thread */
+    dtm_shell_ptr = sh;
+    dtm_thread_running = true;
+
+    /* Start DTM transport thread */
+    /* The thread will call dtm_tr_init() (which calls dtm_init()) and then
+     * dtm_start() */
+    k_thread_create(&dtm_thread_data, dtm_thread_stack,
+                    K_THREAD_STACK_SIZEOF(dtm_thread_stack), dtm_thread_entry,
+                    NULL, NULL, NULL, K_PRIO_COOP(7), 0, K_NO_WAIT);
+    k_thread_name_set(&dtm_thread_data, "dtm_transport");
+  } else if (strcmp(argv[1], "stop") == 0) {
+    if (!dtm_thread_running) {
+      shell_print(sh, "DTM transport thread is not running");
+      return 0;
+    }
+
+    shell_print(sh, "Stopping DTM transport...");
+
+    /* Stop DTM */
+    int err = dtm_stop();
+    if (err) {
+      shell_error(sh, "Failed to stop DTM: %d", err);
+    }
+
+    /* Abort the DTM transport thread */
+    k_thread_abort(&dtm_thread_data);
+    
+    /* Wait a bit for thread to finish */
+    k_msleep(100);
+    
+    /* Reset thread state */
+    dtm_thread_running = false;
+    dtm_shell_ptr = NULL;
+
+    shell_print(sh, "DTM transport stopped");
+  } else {
+    shell_error(sh, "Unknown command: %s", argv[1]);
+    return -EINVAL;
+  }
+
+  return 0;
+}
+
 SHELL_CMD_REGISTER(switch_uart, NULL, "Switch Shell backend UART",
                    cmd_switch_uart);
 SHELL_CMD_REGISTER(pca9955b_test, NULL, "PCA9955B LED driver test commands",
                    cmd_pca9955b_test);
 SHELL_CMD_REGISTER(PN7160_test, NULL, "PN7160 test commands", cmd_pn7160_test);
+SHELL_CMD_REGISTER(dtm_test, NULL,
+                   "Start DTM (initialize Radio and connect interrupts)",
+                   cmd_dtm_test);

@@ -117,6 +117,9 @@ static const nrfx_timer_t timer = NRFX_TIMER_INSTANCE(RADIO_TEST_TIMER_INSTANCE)
 
 static bool sweep_processing;
 
+/* Track if radio_test has been initialized */
+static bool radio_test_initialized = false;
+
 /* Total payload size */
 static uint16_t total_payload_size;
 
@@ -1053,6 +1056,16 @@ static void radio_modulated_tx_carrier_duty_cycle(uint8_t mode, int8_t txpower,
 
 void radio_test_start(const struct radio_test_config *config)
 {
+	/* Initialize radio_test if not already initialized */
+	/* Note: config is passed as non-const here, but we only read from it */
+	if (!radio_test_initialized) {
+		int err = radio_test_init((struct radio_test_config *)config);
+		if (err != 0) {
+			printk("Failed to initialize radio_test: %d\n", err);
+			return;
+		}
+	}
+
 #if CONFIG_FEM
 	fem = config->fem;
 #endif /* CONFIG_FEM */
@@ -1108,6 +1121,14 @@ static void cancel(void)
 	nrfx_timer_disable(&timer);
 	nrfx_timer_clear(&timer);
 
+	/* Disable timer interrupts before uninit */
+	irq_disable(RADIO_TEST_TIMER_IRQn);
+
+	/* Properly uninitialize timer to release it for DTM */
+	if (timer.p_reg != NULL) {
+		nrfx_timer_uninit(&timer);
+	}
+
 	sweep_processing = false;
 
 	if (nrfx_gppi_channel_check(ppi_radio_start)) {
@@ -1132,6 +1153,45 @@ void radio_test_cancel(enum radio_test_mode type)
 			cancel();
 		}
 	}
+}
+
+void radio_test_deinit(void)
+{
+	/* If not initialized, nothing to do */
+	if (!radio_test_initialized) {
+		return;
+	}
+
+	/* Stop any running test */
+	if (test_is_running) {
+		cancel();
+		/* cancel() already uninitialized timer, so we're done */
+	} else {
+		/* If no test was running, we need to uninitialize timer here */
+		nrfx_timer_disable(&timer);
+		nrfx_timer_clear(&timer);
+		irq_disable(RADIO_TEST_TIMER_IRQn);
+		
+		/* Properly uninitialize timer to release it for DTM */
+		if (timer.p_reg != NULL) {
+			nrfx_timer_uninit(&timer);
+		}
+	}
+	
+	/* Disable radio interrupts */
+	irq_disable(RADIO_TEST_RADIO_IRQn);
+	
+	/* Disable radio */
+	radio_disable();
+	
+	/* Release GPPI channel if allocated */
+	if (nrfx_gppi_channel_check(ppi_radio_start)) {
+		nrfx_gppi_channels_disable(BIT(ppi_radio_start));
+		nrfx_gppi_channel_free(ppi_radio_start);
+	}
+	
+	test_is_running = false;
+	radio_test_initialized = false;
 }
 
 void radio_rx_stats_get(struct radio_rx_stats *rx_stats)
@@ -1306,8 +1366,13 @@ int radio_test_init(struct radio_test_config *config)
 {
 	nrfx_err_t nrfx_err;
 
+	/* If already initialized, just return success */
+	if (radio_test_initialized) {
+		return 0;
+	}
+
 	timer_init(config);
-	IRQ_CONNECT(RADIO_TEST_TIMER_IRQn, IRQ_PRIO_LOWEST,
+	irq_connect_dynamic(RADIO_TEST_TIMER_IRQn, IRQ_PRIO_LOWEST,
 		RADIO_TEST_TIMER_IRQ_HANDLER, NULL, 0);
 
 	irq_connect_dynamic(RADIO_TEST_RADIO_IRQn, IRQ_PRIO_LOWEST, radio_handler, config, 0);
@@ -1330,5 +1395,6 @@ int radio_test_init(struct radio_test_config *config)
 	}
 #endif /* CONFIG_FEM */
 
+	radio_test_initialized = true;
 	return 0;
 }
