@@ -198,3 +198,31 @@ config RADIO_TEST_RX_TIMEOUT
 	  received in RX mode when a specified number of packets are set to be received.
 	  If the timeout is reached before the first packet is received, the radio will be disabled.
 endmenu
+
+menu "UWB Configuration"
+config UWB_LOG_ENABLED
+	bool "Enable UWB logging output"
+	default n
+	help
+	  Enable UWB module logging output. If disabled, all UWB log messages will be suppressed.
+
+config UWB_PRINTK_LOG
+	bool "Use printk for UWB logging (instead of shell/logging subsystem)"
+	default n
+	depends on UWB_LOG_ENABLED
+	help
+	  If enabled, UWB logs will use printk() directly instead of shell_print() or Zephyr logging subsystem.
+	  This is useful for debugging but may produce more verbose output.
+endmenu
+
+menu "Shell Configuration"
+config SHELL_THREAD_PRIORITY
+	int "Shell thread priority"
+	default 0
+	range -15 15
+	help
+	  Priority of the shell thread. Lower numbers indicate higher priority.
+	  Default is 0 (normal priority). Use negative values for higher priority.
+	  For cooperative threads, use K_PRIO_COOP() macro values (typically 0-15).
+	  For preemptible threads, use K_PRIO_PREEMPT() macro values (typically -15 to -1).
+endmenu

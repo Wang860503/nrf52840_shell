@@ -18,6 +18,7 @@ static volatile bool ready_flag;
 void tone_gen(uint32_t freq, uint32_t duration);
 void tone_powerup(void);
 void tone_pn7150_detected(void);
+void tone_pn7150_remove(void);
 void tone_em4095_detected(void);
 void tone_em4095_failed(void);
 void tone_em4095_demod_failed(void);

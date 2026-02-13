@@ -112,6 +112,23 @@
         };
     };
 
+    spi3_default: spi3_default {
+        group1 {
+            psels = <NRF_PSEL(SPIM_SCK, 0, 7)>, /* CLK  P0.07 */
+                    <NRF_PSEL(SPIM_MOSI, 0, 25)>, /* MOSI P0.25 */
+                    <NRF_PSEL(SPIM_MISO, 0, 5)>;  /* MISO P0.05 */
+        };
+    };
+
+    spi3_sleep: spi3_sleep {
+        group1 {
+            psels = <NRF_PSEL(SPIM_SCK, 0, 7)>,
+                    <NRF_PSEL(SPIM_MOSI, 0, 25)>,
+                    <NRF_PSEL(SPIM_MISO, 0, 5)>;
+            low-power-enable;
+        };
+    };
+
     pwm0_default: pwm0_default {
         group1 {
             psels = <NRF_PSEL(PWM_OUT0, 1, 2)>;
@@ -166,6 +183,24 @@
     pinctrl-names = "default", "sleep";
 };
 
+&spi3 {
+    status = "okay";
+    compatible = "nordic,nrf-spim";
+    pinctrl-0 = <&spi3_default>;
+    pinctrl-1 = <&spi3_sleep>;
+    pinctrl-names = "default", "sleep";
+
+    /* CS 腳位定義: P0.24 */
+    cs-gpios = <&gpio0 24 GPIO_ACTIVE_LOW>;
+
+    /* 定義 SR1xx 裝置節點 */
+    uwb_sr1xx: uwb@0 {
+        compatible = "nxp,sr1xx"; /* 配合 Driver 的 Compatible String */
+        reg = <0>;                /* 對應 cs-gpios 的第 0 個 CS */
+        spi-max-frequency = <8000000>; /* 8MHz */
+    };
+};
+
 / {
     chosen {
         zephyr,console = &uart0;
@@ -199,10 +234,33 @@
         };
     };
 
+    uwb_control {
+        compatible = "gpio-keys"; /* 借用 gpio-keys 結構來管理一般 GPIO */
+
+        uwb_irq: uwb_irq {
+            gpios = <&gpio1 4 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+            label = "UWB_SENSOR_INT";
+        };
+
+        uwb_ce: uwb_ce {
+            gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
+            label = "UWB_CHIP_ENABLE";
+        };
+
+        uwb_sync: uwb_sync {
+            gpios = <&gpio1 1 GPIO_ACTIVE_HIGH>;
+            label = "UWB_SYNC";
+        };
+    };
+
     aliases {
         pwmbuzzer = &buzzer_pwm;
         em4095demodout = &demod_out;
         em4095shd = &SHD;
         em4095clk = &CLK;
+        uwbspi = &uwb_sr1xx;      /* 指定使用 SPI3 作為 UWB 通訊介面 */
+        uwbirqgpio = &uwb_irq;    /* P1.04 (GPIO5/SensorInt) */
+        uwbcegpio  = &uwb_ce;     /* P1.03 (ChipEnable) */
+        uwbsyncgpio = &uwb_sync;  /* P1.01 (GPIO3/Sync) */
     };
 };

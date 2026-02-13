@@ -1,0 +1,23 @@
+# dts/bindings/nxp,sr1xx.yaml
+
+description: NXP UWB Controller (SR1xx)
+
+compatible: "nxp,sr1xx"
+
+include: spi-device.yaml
+
+properties:
+    irq-gpios:
+        type: phandle-array
+        required: false
+        description: Interrupt pin (INT)
+
+    reset-gpios:
+        type: phandle-array
+        required: false
+        description: Reset pin (RST)
+        
+    ce-gpios:
+        type: phandle-array
+        required: false
+        description: Chip Enable pin (CE)
