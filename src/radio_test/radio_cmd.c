@@ -17,54 +17,55 @@
 #include "fem_al/fem_al.h"
 #endif /* CONFIG_FEM */
 
+#include "demo_test_tx_sem.h"
 #include "dtm_sem.h"
 #include "em4095_sem.h"
 #include "radio_sem.h"
 #include "radio_test.h"
 
 #if NRF_POWER_HAS_DCDCEN_VDDH
-#define TOGGLE_DCDC_HELP                      \
-  "Toggle DCDC state <state>, "               \
-  "if state = 1 then toggle DC/DC state, or " \
-  "if state = 0 then toggle DC/DC VDDH state"
+#define TOGGLE_DCDC_HELP                        \
+    "Toggle DCDC state <state>, "               \
+    "if state = 1 then toggle DC/DC state, or " \
+    "if state = 0 then toggle DC/DC VDDH state"
 #elif NRF_POWER_HAS_DCDCEN
-#define TOGGLE_DCDC_HELP        \
-  "Toggle DCDC state <state>, " \
-  "Toggle DC/DC state regardless of state value"
+#define TOGGLE_DCDC_HELP          \
+    "Toggle DCDC state <state>, " \
+    "Toggle DC/DC state regardless of state value"
 #endif
 
 /* Radio parameter configuration. */
 static struct radio_param_config {
-  /** Radio transmission pattern. */
-  enum transmit_pattern tx_pattern;
+    /** Radio transmission pattern. */
+    enum transmit_pattern tx_pattern;
 
-  /** Radio mode. Data rate and modulation. */
-  nrf_radio_mode_t mode;
+    /** Radio mode. Data rate and modulation. */
+    nrf_radio_mode_t mode;
 
-  /** Radio output power. */
-  int8_t txpower;
+    /** Radio output power. */
+    int8_t txpower;
 
-  /** Radio start channel (frequency). */
-  uint8_t channel_start;
+    /** Radio start channel (frequency). */
+    uint8_t channel_start;
 
-  /** Radio end channel (frequency). */
-  uint8_t channel_end;
+    /** Radio end channel (frequency). */
+    uint8_t channel_end;
 
-  /** Delay time in milliseconds. */
-  uint32_t delay_ms;
+    /** Delay time in milliseconds. */
+    uint32_t delay_ms;
 
-  /** Duty cycle. */
-  uint32_t duty_cycle;
+    /** Duty cycle. */
+    uint32_t duty_cycle;
 
-  /**
-   * Number of packets to be received.
-   * Set to zero for continuous RX.
-   */
-  uint32_t rx_packets_num;
+    /**
+     * Number of packets to be received.
+     * Set to zero for continuous RX.
+     */
+    uint32_t rx_packets_num;
 
 #if CONFIG_FEM
-  /* Front-end module (FEM) configuration. */
-  struct radio_test_fem fem;
+    /* Front-end module (FEM) configuration. */
+    struct radio_test_fem fem;
 #endif /* CONFIG_FEM */
 } config = {.tx_pattern = TRANSMIT_PATTERN_RANDOM,
             .mode = NRF_RADIO_MODE_BLE_1MBIT,
@@ -86,978 +87,1017 @@ static bool test_in_progress;
 
 #if CONFIG_HAS_HW_NRF_RADIO_IEEE802154
 static void ieee_channel_check(const struct shell* shell, uint8_t channel) {
-  if (config.mode == NRF_RADIO_MODE_IEEE802154_250KBIT) {
-    if ((channel < IEEE_MIN_CHANNEL) || (channel > IEEE_MAX_CHANNEL)) {
-      shell_print(shell, "For %s config.mode channel must be between %d and %d",
-                  STRINGIFY(NRF_RADIO_MODE_IEEE802154_250KBIT),
-                  IEEE_MIN_CHANNEL, IEEE_MAX_CHANNEL);
+    if (config.mode == NRF_RADIO_MODE_IEEE802154_250KBIT) {
+        if ((channel < IEEE_MIN_CHANNEL) || (channel > IEEE_MAX_CHANNEL)) {
+            shell_print(shell,
+                        "For %s config.mode channel must be between %d and %d",
+                        STRINGIFY(NRF_RADIO_MODE_IEEE802154_250KBIT),
+                        IEEE_MIN_CHANNEL, IEEE_MAX_CHANNEL);
 
-      shell_print(shell, "Channel set to %d", IEEE_MIN_CHANNEL);
+            shell_print(shell, "Channel set to %d", IEEE_MIN_CHANNEL);
+        }
     }
-  }
 }
 #endif /* CONFIG_HAS_HW_NRF_RADIO_IEEE802154 */
 
 static int cmd_start_channel_set(const struct shell* shell, size_t argc,
                                  char** argv) {
-  uint32_t channel;
+    uint32_t channel;
 
-  if (argc == 1) {
-    shell_help(shell);
-    return SHELL_CMD_HELP_PRINTED;
-  }
+    if (argc == 1) {
+        shell_help(shell);
+        return SHELL_CMD_HELP_PRINTED;
+    }
 
-  if (argc > 2) {
-    shell_error(shell, "%s: bad parameters count", argv[0]);
-    return -EINVAL;
-  }
+    if (argc > 2) {
+        shell_error(shell, "%s: bad parameters count", argv[0]);
+        return -EINVAL;
+    }
 
-  channel = atoi(argv[1]);
+    channel = atoi(argv[1]);
 
-  if (channel > 80) {
-    shell_error(shell, "Channel must be between 0 and 80");
-    return -EINVAL;
-  }
+    if (channel > 80) {
+        shell_error(shell, "Channel must be between 0 and 80");
+        return -EINVAL;
+    }
 
-  config.channel_start = (uint8_t)channel;
+    config.channel_start = (uint8_t)channel;
 
-  shell_print(shell, "Start channel set to: %d", channel);
-  return 0;
+    shell_print(shell, "Start channel set to: %d", channel);
+    return 0;
 }
 
 static int cmd_end_channel_set(const struct shell* shell, size_t argc,
                                char** argv) {
-  uint32_t channel;
+    uint32_t channel;
 
-  if (argc == 1) {
-    shell_help(shell);
-    return SHELL_CMD_HELP_PRINTED;
-  }
+    if (argc == 1) {
+        shell_help(shell);
+        return SHELL_CMD_HELP_PRINTED;
+    }
 
-  if (argc > 2) {
-    shell_error(shell, "%s: bad parameters count", argv[0]);
-    return -EINVAL;
-  }
+    if (argc > 2) {
+        shell_error(shell, "%s: bad parameters count", argv[0]);
+        return -EINVAL;
+    }
 
-  channel = atoi(argv[1]);
+    channel = atoi(argv[1]);
 
-  if (channel > 80) {
-    shell_error(shell, "Channel must be between 0 and 80");
-    return -EINVAL;
-  }
+    if (channel > 80) {
+        shell_error(shell, "Channel must be between 0 and 80");
+        return -EINVAL;
+    }
 
-  config.channel_end = (uint8_t)channel;
+    config.channel_end = (uint8_t)channel;
 
-  shell_print(shell, "End channel set to: %d", channel);
-  return 0;
+    shell_print(shell, "End channel set to: %d", channel);
+    return 0;
 }
 
 static int cmd_time_set(const struct shell* shell, size_t argc, char** argv) {
-  uint32_t time;
+    uint32_t time;
 
-  if (argc == 1) {
-    shell_help(shell);
-    return SHELL_CMD_HELP_PRINTED;
-  }
+    if (argc == 1) {
+        shell_help(shell);
+        return SHELL_CMD_HELP_PRINTED;
+    }
 
-  if (argc > 2) {
-    shell_error(shell, "%s: bad parameters count", argv[0]);
-    return -EINVAL;
-  }
+    if (argc > 2) {
+        shell_error(shell, "%s: bad parameters count", argv[0]);
+        return -EINVAL;
+    }
 
-  time = atoi(argv[1]);
+    time = atoi(argv[1]);
 
-  if (time > 99) {
-    shell_error(shell, "Delay time must be between 0 and 99 ms");
-    return -EINVAL;
-  }
+    if (time > 99) {
+        shell_error(shell, "Delay time must be between 0 and 99 ms");
+        return -EINVAL;
+    }
 
-  config.delay_ms = time;
+    config.delay_ms = time;
 
-  shell_print(shell, "Delay time set to: %d", time);
-  return 0;
+    shell_print(shell, "Delay time set to: %d", time);
+    return 0;
 }
 
 static int cmd_cancel(const struct shell* shell, size_t argc, char** argv) {
-  radio_test_cancel(test_config.type);
-  test_in_progress = false;
-  k_sem_give(&radio_sem);
-  return 0;
+    radio_test_cancel(test_config.type);
+    test_in_progress = false;
+    k_sem_give(&radio_sem);
+    return 0;
 }
 
 static int cmd_data_rate_set(const struct shell* shell, size_t argc,
                              char** argv) {
-  if (argc == 1) {
-    shell_help(shell);
-    return SHELL_CMD_HELP_PRINTED;
-  }
+    if (argc == 1) {
+        shell_help(shell);
+        return SHELL_CMD_HELP_PRINTED;
+    }
 
-  if (argc > 2) {
-    shell_error(shell, "%s: bad parameters count", argv[0]);
-    return -EINVAL;
-  }
+    if (argc > 2) {
+        shell_error(shell, "%s: bad parameters count", argv[0]);
+        return -EINVAL;
+    }
 
-  if (argc == 2) {
-    shell_error(shell, "Unknown argument: %s", argv[1]);
-    return -EINVAL;
-  }
+    if (argc == 2) {
+        shell_error(shell, "Unknown argument: %s", argv[1]);
+        return -EINVAL;
+    }
 
-  return 0;
+    return 0;
 }
 
 static int cmd_tx_carrier_start(const struct shell* shell, size_t argc,
                                 char** argv) {
-  if (k_sem_count_get(&dtm_sem) == 0) {
-    shell_error(shell, "DTM is starting, Please close the DTM.");
-    return -1;
-  }
-  if (k_sem_count_get(&em4095_sem) == 0) {
-    shell_error(shell, "EM4095 is starting, Please close the EM4095.");
-    return -1;
-  }
-  if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
-    shell_error(shell, "radio test is starting.");
-    return -1;
-  }
+    if (k_sem_count_get(&uwb_test_tx) == 0) {
+        shell_error(shell, "UWB demo test tx is starting.");
+        return -1;
+    }
+    if (k_sem_count_get(&dtm_sem) == 0) {
+        shell_error(shell, "DTM is starting, Please close the DTM.");
+        return -1;
+    }
+    if (k_sem_count_get(&em4095_sem) == 0) {
+        shell_error(shell, "EM4095 is starting, Please close the EM4095.");
+        return -1;
+    }
+    if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
+        shell_error(shell, "radio test is starting.");
+        return -1;
+    }
 
-  if (test_in_progress) {
-    radio_test_cancel(test_config.type);
-    test_in_progress = false;
-  }
+    if (test_in_progress) {
+        radio_test_cancel(test_config.type);
+        test_in_progress = false;
+    }
 
 #if CONFIG_HAS_HW_NRF_RADIO_IEEE802154
-  ieee_channel_check(shell, config.channel_start);
+    ieee_channel_check(shell, config.channel_start);
 #endif /* CONFIG_HAS_HW_NRF_RADIO_IEEE802154 */
 
-  memset(&test_config, 0, sizeof(test_config));
-  test_config.type = UNMODULATED_TX;
-  test_config.mode = config.mode;
-  test_config.params.unmodulated_tx.txpower = config.txpower;
-  test_config.params.unmodulated_tx.channel = config.channel_start;
+    memset(&test_config, 0, sizeof(test_config));
+    test_config.type = UNMODULATED_TX;
+    test_config.mode = config.mode;
+    test_config.params.unmodulated_tx.txpower = config.txpower;
+    test_config.params.unmodulated_tx.channel = config.channel_start;
 #if CONFIG_FEM
-  test_config.fem = config.fem;
+    test_config.fem = config.fem;
 #endif /* CONFIG_FEM */
-  radio_test_start(&test_config);
+    radio_test_start(&test_config);
 
-  shell_print(shell, "Start the TX carrier");
-  return 0;
+    shell_print(shell, "Start the TX carrier");
+    return 0;
 }
 
 static void tx_modulated_carrier_end(void) {
-  printk("The modulated TX has finished\n");
+    printk("The modulated TX has finished\n");
 }
 
 static void rx_end(void) {
-  uint32_t recv_pkt, req_pkt;
-  float error_rate;
+    uint32_t recv_pkt, req_pkt;
+    float error_rate;
 
-  struct radio_rx_stats rx_stats;
+    struct radio_rx_stats rx_stats;
 
-  memset(&rx_stats, 0, sizeof(rx_stats));
+    memset(&rx_stats, 0, sizeof(rx_stats));
 
-  radio_rx_stats_get(&rx_stats);
+    radio_rx_stats_get(&rx_stats);
 
-  recv_pkt = rx_stats.packet_cnt;
-  req_pkt = config.rx_packets_num;
+    recv_pkt = rx_stats.packet_cnt;
+    req_pkt = config.rx_packets_num;
 
-  if (req_pkt == 0 || req_pkt < recv_pkt) {
-    printk("Error receiving packets\n");
-    return;
-  }
+    if (req_pkt == 0 || req_pkt < recv_pkt) {
+        printk("Error receiving packets\n");
+        return;
+    }
 
-  error_rate = ((float)(req_pkt - recv_pkt) / req_pkt) * 100.0f;
+    error_rate = ((float)(req_pkt - recv_pkt) / req_pkt) * 100.0f;
 
-  printk("\n");
-  printk("Received number of packets: %d\n", recv_pkt);
-  printk("Required number of packages: %d\n", req_pkt);
-  printk("Error rate: %.2f%%\n", (double)error_rate);
+    printk("\n");
+    printk("Received number of packets: %d\n", recv_pkt);
+    printk("Required number of packages: %d\n", req_pkt);
+    printk("Error rate: %.2f%%\n", (double)error_rate);
 
-  if (error_rate >= 10) {
-    printk("\033[91mWarning: High error rate! \033[0m\n");
-  }
+    if (error_rate >= 10) {
+        printk("\033[91mWarning: High error rate! \033[0m\n");
+    }
 }
 
 static int cmd_tx_modulated_carrier_start(const struct shell* shell,
                                           size_t argc, char** argv) {
-  if (k_sem_count_get(&dtm_sem) == 0) {
-    shell_error(shell, "DTM is starting, Please close the DTM.");
-    return -1;
-  }
-  if (k_sem_count_get(&em4095_sem) == 0) {
-    shell_error(shell, "EM4095 is starting, Please close the EM4095.");
-    return -1;
-  }
+    if (k_sem_count_get(&uwb_test_tx) == 0) {
+        shell_error(shell, "UWB demo test tx is starting.");
+        return -1;
+    }
 
-  if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
-    shell_error(shell, "radio test is starting.");
-    return -1;
-  }
+    if (k_sem_count_get(&dtm_sem) == 0) {
+        shell_error(shell, "DTM is starting, Please close the DTM.");
+        return -1;
+    }
 
-  if (test_in_progress) {
-    radio_test_cancel(test_config.type);
-    test_in_progress = false;
-  }
+    if (k_sem_count_get(&em4095_sem) == 0) {
+        shell_error(shell, "EM4095 is starting, Please close the EM4095.");
+        return -1;
+    }
+
+    if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
+        shell_error(shell, "radio test is starting.");
+        return -1;
+    }
+
+    if (test_in_progress) {
+        radio_test_cancel(test_config.type);
+        test_in_progress = false;
+    }
 
 #if CONFIG_HAS_HW_NRF_RADIO_IEEE802154
-  ieee_channel_check(shell, config.channel_start);
+    ieee_channel_check(shell, config.channel_start);
 #endif /* CONFIG_HAS_HW_NRF_RADIO_IEEE802154 */
 
-  if (argc > 2) {
-    shell_error(shell, "%s: bad parameters count.", argv[0]);
-    return -EINVAL;
-  }
+    if (argc > 2) {
+        shell_error(shell, "%s: bad parameters count.", argv[0]);
+        return -EINVAL;
+    }
 
-  memset(&test_config, 0, sizeof(test_config));
-  test_config.type = MODULATED_TX;
-  test_config.mode = config.mode;
-  test_config.params.modulated_tx.txpower = config.txpower;
-  test_config.params.modulated_tx.channel = config.channel_start;
-  test_config.params.modulated_tx.pattern = config.tx_pattern;
+    memset(&test_config, 0, sizeof(test_config));
+    test_config.type = MODULATED_TX;
+    test_config.mode = config.mode;
+    test_config.params.modulated_tx.txpower = config.txpower;
+    test_config.params.modulated_tx.channel = config.channel_start;
+    test_config.params.modulated_tx.pattern = config.tx_pattern;
 #if CONFIG_FEM
-  test_config.fem = config.fem;
+    test_config.fem = config.fem;
 #endif /* CONFIG_FEM */
 
-  if (argc == 2) {
-    test_config.params.modulated_tx.packets_num = atoi(argv[1]);
-    test_config.params.modulated_tx.cb = tx_modulated_carrier_end;
-  }
+    if (argc == 2) {
+        test_config.params.modulated_tx.packets_num = atoi(argv[1]);
+        test_config.params.modulated_tx.cb = tx_modulated_carrier_end;
+    }
 
-  radio_test_start(&test_config);
+    radio_test_start(&test_config);
 
-  shell_print(shell, "Start the modulated TX carrier");
-  return 0;
+    shell_print(shell, "Start the modulated TX carrier");
+    return 0;
 }
 
 static int cmd_duty_cycle_set(const struct shell* shell, size_t argc,
                               char** argv) {
-  uint32_t duty_cycle;
+    uint32_t duty_cycle;
 
-  if (k_sem_count_get(&dtm_sem) == 0) {
-    shell_error(shell, "DTM is starting, Please close the DTM.");
-    return -1;
-  }
-  if (k_sem_count_get(&em4095_sem) == 0) {
-    shell_error(shell, "EM4095 is starting, Please close the EM4095.");
-    return -1;
-  }
+    if (k_sem_count_get(&uwb_test_tx) == 0) {
+        shell_error(shell, "UWB demo test tx is starting.");
+        return -1;
+    }
 
-  if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
-    shell_error(shell, "radio test is starting.");
-    return -1;
-  }
+    if (k_sem_count_get(&dtm_sem) == 0) {
+        shell_error(shell, "DTM is starting, Please close the DTM.");
+        return -1;
+    }
+    if (k_sem_count_get(&em4095_sem) == 0) {
+        shell_error(shell, "EM4095 is starting, Please close the EM4095.");
+        return -1;
+    }
 
-  if (argc == 1) {
-    shell_help(shell);
-    return SHELL_CMD_HELP_PRINTED;
-  }
+    if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
+        shell_error(shell, "radio test is starting.");
+        return -1;
+    }
 
-  if (argc > 2) {
-    shell_error(shell, "%s: bad parameters count.", argv[0]);
-    return -EINVAL;
-  }
+    if (argc == 1) {
+        shell_help(shell);
+        return SHELL_CMD_HELP_PRINTED;
+    }
 
-  duty_cycle = atoi(argv[1]);
+    if (argc > 2) {
+        shell_error(shell, "%s: bad parameters count.", argv[0]);
+        return -EINVAL;
+    }
 
-  if (duty_cycle > 90) {
-    shell_error(shell, "Duty cycle must be between 1 and 90.");
-    return -EINVAL;
-  }
+    duty_cycle = atoi(argv[1]);
 
-  config.duty_cycle = duty_cycle;
+    if (duty_cycle > 90) {
+        shell_error(shell, "Duty cycle must be between 1 and 90.");
+        return -EINVAL;
+    }
+
+    config.duty_cycle = duty_cycle;
 
 #if CONFIG_HAS_HW_NRF_RADIO_IEEE802154
-  ieee_channel_check(shell, config.channel_start);
+    ieee_channel_check(shell, config.channel_start);
 #endif /* CONFIG_HAS_HW_NRF_RADIO_IEEE802154 */
 
-  memset(&test_config, 0, sizeof(test_config));
-  test_config.type = MODULATED_TX_DUTY_CYCLE;
-  test_config.mode = config.mode;
-  test_config.params.modulated_tx_duty_cycle.txpower = config.txpower;
-  test_config.params.modulated_tx_duty_cycle.pattern = config.tx_pattern;
-  test_config.params.modulated_tx_duty_cycle.channel = config.channel_start;
-  test_config.params.modulated_tx_duty_cycle.duty_cycle = config.duty_cycle;
+    memset(&test_config, 0, sizeof(test_config));
+    test_config.type = MODULATED_TX_DUTY_CYCLE;
+    test_config.mode = config.mode;
+    test_config.params.modulated_tx_duty_cycle.txpower = config.txpower;
+    test_config.params.modulated_tx_duty_cycle.pattern = config.tx_pattern;
+    test_config.params.modulated_tx_duty_cycle.channel = config.channel_start;
+    test_config.params.modulated_tx_duty_cycle.duty_cycle = config.duty_cycle;
 #if CONFIG_FEM
-  test_config.fem = config.fem;
+    test_config.fem = config.fem;
 #endif /* CONFIG_FEM */
 
-  radio_test_start(&test_config);
-  test_in_progress = true;
+    radio_test_start(&test_config);
+    test_in_progress = true;
 
-  return 0;
+    return 0;
 }
 
 #if defined(TOGGLE_DCDC_HELP)
 static int cmd_toggle_dc(const struct shell* shell, size_t argc, char** argv) {
-  uint32_t state;
+    uint32_t state;
 
-  if (argc == 1) {
-    shell_help(shell);
-    return SHELL_CMD_HELP_PRINTED;
-  }
+    if (argc == 1) {
+        shell_help(shell);
+        return SHELL_CMD_HELP_PRINTED;
+    }
 
-  if (argc > 2) {
-    shell_error(shell, "%s: bad parameters count", argv[0]);
-    return -EINVAL;
-  }
+    if (argc > 2) {
+        shell_error(shell, "%s: bad parameters count", argv[0]);
+        return -EINVAL;
+    }
 
-  state = atoi(argv[1]);
-  if (state > 1) {
-    shell_error(shell, "Invalid DCDC value provided");
-    return -EINVAL;
-  }
+    state = atoi(argv[1]);
+    if (state > 1) {
+        shell_error(shell, "Invalid DCDC value provided");
+        return -EINVAL;
+    }
 
-  toggle_dcdc_state((uint8_t)state);
+    toggle_dcdc_state((uint8_t)state);
 
 #if NRF_POWER_HAS_DCDCEN_VDDH
-  shell_print(shell,
-              "DCDC VDDH state %d\n"
-              "Write '0' to toggle state of DCDC REG0\n"
-              "Write '1' to toggle state of DCDC REG1",
-              nrf_power_dcdcen_vddh_get(NRF_POWER));
+    shell_print(shell,
+                "DCDC VDDH state %d\n"
+                "Write '0' to toggle state of DCDC REG0\n"
+                "Write '1' to toggle state of DCDC REG1",
+                nrf_power_dcdcen_vddh_get(NRF_POWER));
 #endif /* NRF_POWER_HAS_DCDCEN_VDDH */
 
 #if NRF_POWER_HAS_DCDCEN
-  shell_print(shell,
-              "DCDC state %d\n"
-              "Write '1' or '0' to toggle",
-              nrf_power_dcdcen_get(NRF_POWER));
+    shell_print(shell,
+                "DCDC state %d\n"
+                "Write '1' or '0' to toggle",
+                nrf_power_dcdcen_get(NRF_POWER));
 #endif /* NRF_POWER_HAS_DCDCEN */
 
-  return 0;
+    return 0;
 }
 #endif
 
 static int cmd_output_power_set(const struct shell* shell, size_t argc,
                                 char** argv) {
-  if (argc == 1) {
-    shell_help(shell);
-    return SHELL_CMD_HELP_PRINTED;
-  }
+    if (argc == 1) {
+        shell_help(shell);
+        return SHELL_CMD_HELP_PRINTED;
+    }
 
-  if (argc > 2) {
-    shell_error(shell, "%s: bad parameters count.", argv[0]);
-    return -EINVAL;
-  }
+    if (argc > 2) {
+        shell_error(shell, "%s: bad parameters count.", argv[0]);
+        return -EINVAL;
+    }
 
-  if (argc == 2) {
-    shell_error(shell, "Unknown argument: %s", argv[1]);
-    return -EINVAL;
-  }
+    if (argc == 2) {
+        shell_error(shell, "Unknown argument: %s", argv[1]);
+        return -EINVAL;
+    }
 
-  return 0;
+    return 0;
 }
 
 static int cmd_transmit_pattern_set(const struct shell* shell, size_t argc,
                                     char** argv) {
-  if (argc == 1) {
-    shell_help(shell);
-    return SHELL_CMD_HELP_PRINTED;
-  }
+    if (argc == 1) {
+        shell_help(shell);
+        return SHELL_CMD_HELP_PRINTED;
+    }
 
-  if (argc > 2) {
-    shell_error(shell, "%s: bad parameters count.", argv[0]);
-    return -EINVAL;
-  }
+    if (argc > 2) {
+        shell_error(shell, "%s: bad parameters count.", argv[0]);
+        return -EINVAL;
+    }
 
-  if (argc == 2) {
-    shell_error(shell, "Unknown argument: %s.", argv[1]);
-    return -EINVAL;
-  }
+    if (argc == 2) {
+        shell_error(shell, "Unknown argument: %s.", argv[1]);
+        return -EINVAL;
+    }
 
-  return 0;
+    return 0;
 }
 
 static int cmd_print(const struct shell* shell, size_t argc, char** argv) {
-  shell_print(shell, "Parameters:");
+    shell_print(shell, "Parameters:");
 
-  switch (config.mode) {
+    switch (config.mode) {
 #if defined(RADIO_MODE_MODE_Nrf_250Kbit)
-    case NRF_RADIO_MODE_NRF_250KBIT:
-      shell_print(shell, "Data rate: %s",
-                  STRINGIFY(NRF_RADIO_MODE_NRF_250KBIT));
-      break;
+        case NRF_RADIO_MODE_NRF_250KBIT:
+            shell_print(shell, "Data rate: %s",
+                        STRINGIFY(NRF_RADIO_MODE_NRF_250KBIT));
+            break;
 
 #endif /* defined(RADIO_MODE_MODE_Nrf_250Kbit) */
 
 #if defined(RADIO_MODE_MODE_Nrf_4Mbit0_5)
-    case NRF_RADIO_MODE_NRF_4MBIT_H_0_5:
-      shell_print(shell, "Data rate: %s",
-                  STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_H_0_5));
-      break;
+        case NRF_RADIO_MODE_NRF_4MBIT_H_0_5:
+            shell_print(shell, "Data rate: %s",
+                        STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_H_0_5));
+            break;
 #endif /* defined(RADIO_MODE_MODE_Nrf_4Mbit0_5) */
 
 #if defined(RADIO_MODE_MODE_Nrf_4Mbit0_25)
-    case NRF_RADIO_MODE_NRF_4MBIT_H_0_25:
-      shell_print(shell, "Data rate: %s",
-                  STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_H_0_25));
-      break;
+        case NRF_RADIO_MODE_NRF_4MBIT_H_0_25:
+            shell_print(shell, "Data rate: %s",
+                        STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_H_0_25));
+            break;
 #endif /* defined(RADIO_MODE_MODE_Nrf_4Mbit0_25) */
 
 #if defined(RADIO_MODE_MODE_Nrf_4Mbit_0BT6)
-    case NRF_RADIO_MODE_NRF_4MBIT_BT_0_6:
-      shell_print(shell, "Data rate: %s",
-                  STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_BT_0_6));
-      break;
+        case NRF_RADIO_MODE_NRF_4MBIT_BT_0_6:
+            shell_print(shell, "Data rate: %s",
+                        STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_BT_0_6));
+            break;
 #endif /* defined(RADIO_MODE_MODE_Nrf_4Mbit_0BT6) */
 
 #if defined(RADIO_MODE_MODE_Nrf_4Mbit_0BT4)
-    case NRF_RADIO_MODE_NRF_4MBIT_BT_0_4:
-      shell_print(shell, "Data rate: %s",
-                  STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_BT_0_4));
-      break;
+        case NRF_RADIO_MODE_NRF_4MBIT_BT_0_4:
+            shell_print(shell, "Data rate: %s",
+                        STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_BT_0_4));
+            break;
 #endif /* defined(RADIO_MODE_MODE_Nrf_4Mbit_0BT4) */
 
-    case NRF_RADIO_MODE_NRF_1MBIT:
-      shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_NRF_1MBIT));
-      break;
+        case NRF_RADIO_MODE_NRF_1MBIT:
+            shell_print(shell, "Data rate: %s",
+                        STRINGIFY(NRF_RADIO_MODE_NRF_1MBIT));
+            break;
 
-    case NRF_RADIO_MODE_NRF_2MBIT:
-      shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_NRF_2MBIT));
-      break;
+        case NRF_RADIO_MODE_NRF_2MBIT:
+            shell_print(shell, "Data rate: %s",
+                        STRINGIFY(NRF_RADIO_MODE_NRF_2MBIT));
+            break;
 
-    case NRF_RADIO_MODE_BLE_1MBIT:
-      shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_BLE_1MBIT));
-      break;
+        case NRF_RADIO_MODE_BLE_1MBIT:
+            shell_print(shell, "Data rate: %s",
+                        STRINGIFY(NRF_RADIO_MODE_BLE_1MBIT));
+            break;
 
-    case NRF_RADIO_MODE_BLE_2MBIT:
-      shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_BLE_2MBIT));
-      break;
+        case NRF_RADIO_MODE_BLE_2MBIT:
+            shell_print(shell, "Data rate: %s",
+                        STRINGIFY(NRF_RADIO_MODE_BLE_2MBIT));
+            break;
 
 #if CONFIG_HAS_HW_NRF_RADIO_BLE_CODED
-    case NRF_RADIO_MODE_BLE_LR125KBIT:
-      shell_print(shell, "Data rate: %s",
-                  STRINGIFY(NRF_RADIO_MODE_BLE_LR125KBIT));
-      break;
+        case NRF_RADIO_MODE_BLE_LR125KBIT:
+            shell_print(shell, "Data rate: %s",
+                        STRINGIFY(NRF_RADIO_MODE_BLE_LR125KBIT));
+            break;
 
-    case NRF_RADIO_MODE_BLE_LR500KBIT:
-      shell_print(shell, "Data rate: %s",
-                  STRINGIFY(NRF_RADIO_MODE_BLE_LR500KBIT));
-      break;
+        case NRF_RADIO_MODE_BLE_LR500KBIT:
+            shell_print(shell, "Data rate: %s",
+                        STRINGIFY(NRF_RADIO_MODE_BLE_LR500KBIT));
+            break;
 #endif /* CONFIG_HAS_HW_NRF_RADIO_BLE_CODED */
 
 #if CONFIG_HAS_HW_NRF_RADIO_IEEE802154
-    case NRF_RADIO_MODE_IEEE802154_250KBIT:
-      shell_print(shell, "Data rate: %s",
-                  STRINGIFY(NRF_RADIO_MODE_IEEE802154_250KBIT));
-      break;
+        case NRF_RADIO_MODE_IEEE802154_250KBIT:
+            shell_print(shell, "Data rate: %s",
+                        STRINGIFY(NRF_RADIO_MODE_IEEE802154_250KBIT));
+            break;
 #endif /* CONFIG_HAS_HW_NRF_RADIO_IEEE802154 */
 
-    default:
-      shell_print(shell, "Data rate unknown or deprecated: %d\n\r",
-                  config.mode);
-      break;
-  }
+        default:
+            shell_print(shell, "Data rate unknown or deprecated: %d\n\r",
+                        config.mode);
+            break;
+    }
 
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 
-  switch (config.tx_pattern) {
-    case TRANSMIT_PATTERN_RANDOM:
-      shell_print(shell, "Transmission pattern: %s",
-                  STRINGIFY(TRANSMIT_PATTERN_RANDOM));
-      break;
+    switch (config.tx_pattern) {
+        case TRANSMIT_PATTERN_RANDOM:
+            shell_print(shell, "Transmission pattern: %s",
+                        STRINGIFY(TRANSMIT_PATTERN_RANDOM));
+            break;
 
-    case TRANSMIT_PATTERN_11110000:
-      shell_print(shell, "Transmission pattern: %s",
-                  STRINGIFY(TRANSMIT_PATTERN_11110000));
-      break;
+        case TRANSMIT_PATTERN_11110000:
+            shell_print(shell, "Transmission pattern: %s",
+                        STRINGIFY(TRANSMIT_PATTERN_11110000));
+            break;
 
-    case TRANSMIT_PATTERN_11001100:
-      shell_print(shell, "Transmission pattern: %s",
-                  STRINGIFY(TRANSMIT_PATTERN_11001100));
-      break;
+        case TRANSMIT_PATTERN_11001100:
+            shell_print(shell, "Transmission pattern: %s",
+                        STRINGIFY(TRANSMIT_PATTERN_11001100));
+            break;
 
-    default:
-      shell_print(shell, "Transmission pattern unknown: %d", config.tx_pattern);
-      break;
-  }
+        default:
+            shell_print(shell, "Transmission pattern unknown: %d",
+                        config.tx_pattern);
+            break;
+    }
 
-  shell_print(shell,
-              "Start Channel: %hhu\n"
-              "End Channel: %hhu\n"
-              "Time on each channel: %u ms\n"
-              "Duty cycle: %u percent\n",
-              config.channel_start, config.channel_end, config.delay_ms,
-              config.duty_cycle);
+    shell_print(shell,
+                "Start Channel: %hhu\n"
+                "End Channel: %hhu\n"
+                "Time on each channel: %u ms\n"
+                "Duty cycle: %u percent\n",
+                config.channel_start, config.channel_end, config.delay_ms,
+                config.duty_cycle);
 
-  return 0;
+    return 0;
 }
 
 static int cmd_rx_sweep_start(const struct shell* shell, size_t argc,
                               char** argv) {
-  if (k_sem_count_get(&dtm_sem) == 0) {
-    shell_error(shell, "DTM is starting, Please close the DTM.");
-    return -1;
-  }
-  if (k_sem_count_get(&em4095_sem) == 0) {
-    shell_error(shell, "EM4095 is starting, Please close the EM4095.");
-    return -1;
-  }
+    if (k_sem_count_get(&uwb_test_tx) == 0) {
+        shell_error(shell, "UWB demo test tx is starting.");
+        return -1;
+    }
 
-  if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
-    shell_error(shell, "radio test is starting.");
-    return -1;
-  }
+    if (k_sem_count_get(&dtm_sem) == 0) {
+        shell_error(shell, "DTM is starting, Please close the DTM.");
+        return -1;
+    }
+    if (k_sem_count_get(&em4095_sem) == 0) {
+        shell_error(shell, "EM4095 is starting, Please close the EM4095.");
+        return -1;
+    }
 
-  memset(&test_config, 0, sizeof(test_config));
-  test_config.type = RX_SWEEP;
-  test_config.mode = config.mode;
-  test_config.params.rx_sweep.channel_start = config.channel_start;
-  test_config.params.rx_sweep.channel_end = config.channel_end;
-  test_config.params.rx_sweep.delay_ms = config.delay_ms;
+    if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
+        shell_error(shell, "radio test is starting.");
+        return -1;
+    }
+
+    memset(&test_config, 0, sizeof(test_config));
+    test_config.type = RX_SWEEP;
+    test_config.mode = config.mode;
+    test_config.params.rx_sweep.channel_start = config.channel_start;
+    test_config.params.rx_sweep.channel_end = config.channel_end;
+    test_config.params.rx_sweep.delay_ms = config.delay_ms;
 #if CONFIG_FEM
-  test_config.fem = config.fem;
+    test_config.fem = config.fem;
 #endif /* CONFIG_FEM */
 
-  radio_test_start(&test_config);
+    radio_test_start(&test_config);
 
-  test_in_progress = true;
+    test_in_progress = true;
 
-  shell_print(shell, "RX sweep");
-  return 0;
+    shell_print(shell, "RX sweep");
+    return 0;
 }
 
 static int cmd_tx_sweep_start(const struct shell* shell, size_t argc,
                               char** argv) {
-  if (k_sem_count_get(&dtm_sem) == 0) {
-    shell_error(shell, "DTM is starting, Please close the DTM.");
-    return -1;
-  }
-  if (k_sem_count_get(&em4095_sem) == 0) {
-    shell_error(shell, "EM4095 is starting, Please close the EM4095.");
-    return -1;
-  }
+    if (k_sem_count_get(&uwb_test_tx) == 0) {
+        shell_error(shell, "UWB demo test tx is starting.");
+        return -1;
+    }
 
-  if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
-    shell_error(shell, "radio test is starting.");
-    return -1;
-  }
+    if (k_sem_count_get(&dtm_sem) == 0) {
+        shell_error(shell, "DTM is starting, Please close the DTM.");
+        return -1;
+    }
+    if (k_sem_count_get(&em4095_sem) == 0) {
+        shell_error(shell, "EM4095 is starting, Please close the EM4095.");
+        return -1;
+    }
 
-  memset(&test_config, 0, sizeof(test_config));
-  test_config.type = TX_SWEEP;
-  test_config.mode = config.mode;
-  test_config.params.tx_sweep.channel_start = config.channel_start;
-  test_config.params.tx_sweep.channel_end = config.channel_end;
-  test_config.params.tx_sweep.delay_ms = config.delay_ms;
-  test_config.params.tx_sweep.txpower = config.txpower;
+    if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
+        shell_error(shell, "radio test is starting.");
+        return -1;
+    }
+
+    memset(&test_config, 0, sizeof(test_config));
+    test_config.type = TX_SWEEP;
+    test_config.mode = config.mode;
+    test_config.params.tx_sweep.channel_start = config.channel_start;
+    test_config.params.tx_sweep.channel_end = config.channel_end;
+    test_config.params.tx_sweep.delay_ms = config.delay_ms;
+    test_config.params.tx_sweep.txpower = config.txpower;
 #if CONFIG_FEM
-  test_config.fem = config.fem;
+    test_config.fem = config.fem;
 #endif /* CONFIG_FEM */
 
-  radio_test_start(&test_config);
+    radio_test_start(&test_config);
 
-  test_in_progress = true;
+    test_in_progress = true;
 
-  shell_print(shell, "TX sweep");
-  return 0;
+    shell_print(shell, "TX sweep");
+    return 0;
 }
 
 static int cmd_rx_start(const struct shell* shell, size_t argc, char** argv) {
-  if (k_sem_count_get(&dtm_sem) == 0) {
-    shell_error(shell, "DTM is starting, Please close the DTM.");
-    return -1;
-  }
-  if (k_sem_count_get(&em4095_sem) == 0) {
-    shell_error(shell, "EM4095 is starting, Please close the EM4095.");
-    return -1;
-  }
+    if (k_sem_count_get(&uwb_test_tx) == 0) {
+        shell_error(shell, "UWB demo test tx is starting.");
+        return -1;
+    }
 
-  if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
-    shell_error(shell, "radio test is starting.");
-    return -1;
-  }
+    if (k_sem_count_get(&dtm_sem) == 0) {
+        shell_error(shell, "DTM is starting, Please close the DTM.");
+        return -1;
+    }
+    if (k_sem_count_get(&em4095_sem) == 0) {
+        shell_error(shell, "EM4095 is starting, Please close the EM4095.");
+        return -1;
+    }
 
-  if (test_in_progress) {
-    radio_test_cancel(test_config.type);
-    test_in_progress = false;
-  }
+    if (k_sem_take(&radio_sem, K_NO_WAIT) != 0) {
+        shell_error(shell, "radio test is starting.");
+        return -1;
+    }
 
-  if (argc > 2) {
-    shell_error(shell, "%s: too many arguments", argv[0]);
-    return -EINVAL;
-  }
+    if (test_in_progress) {
+        radio_test_cancel(test_config.type);
+        test_in_progress = false;
+    }
+
+    if (argc > 2) {
+        shell_error(shell, "%s: too many arguments", argv[0]);
+        return -EINVAL;
+    }
 
 #if CONFIG_HAS_HW_NRF_RADIO_IEEE802154
-  ieee_channel_check(shell, config.channel_start);
+    ieee_channel_check(shell, config.channel_start);
 #endif /* CONFIG_HAS_HW_NRF_RADIO_IEEE802154 */
 
-  memset(&test_config, 0, sizeof(test_config));
-  test_config.type = RX;
-  test_config.mode = config.mode;
-  test_config.params.rx.channel = config.channel_start;
-  test_config.params.rx.pattern = config.tx_pattern;
+    memset(&test_config, 0, sizeof(test_config));
+    test_config.type = RX;
+    test_config.mode = config.mode;
+    test_config.params.rx.channel = config.channel_start;
+    test_config.params.rx.pattern = config.tx_pattern;
 #if CONFIG_FEM
-  test_config.fem = config.fem;
+    test_config.fem = config.fem;
 #endif /* CONFIG_FEM */
 
-  if (argc == 2) {
-    config.rx_packets_num = atoi(argv[1]);
-    test_config.params.rx.packets_num = config.rx_packets_num;
-    test_config.params.rx.cb = rx_end;
+    if (argc == 2) {
+        config.rx_packets_num = atoi(argv[1]);
+        test_config.params.rx.packets_num = config.rx_packets_num;
+        test_config.params.rx.cb = rx_end;
 
-    if (config.rx_packets_num == 0) {
-      shell_error(
-          shell, "The number of packets to receive must be greater than zero.");
-      return -EINVAL;
+        if (config.rx_packets_num == 0) {
+            shell_error(
+                shell,
+                "The number of packets to receive must be greater than zero.");
+            return -EINVAL;
+        }
     }
-  }
 
-  radio_test_start(&test_config);
+    radio_test_start(&test_config);
 
-  return 0;
+    return 0;
 }
 
 #if defined(RADIO_TXPOWER_TXPOWER_Pos10dBm)
 static void cmd_pos10dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = 10;
-  shell_print(shell, "TX power: %d", config.txpower);
+    config.txpower = 10;
+    shell_print(shell, "TX power: %d", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Pos10dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Pos9dBm)
 static void cmd_pos9dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = 9;
-  shell_print(shell, "TX power: %d", config.txpower);
+    config.txpower = 9;
+    shell_print(shell, "TX power: %d", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Pos9dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Pos8dBm)
 static void cmd_pos8dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = 8;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = 8;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Pos8dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Pos7dBm)
 static void cmd_pos7dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = 7;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = 7;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Pos7dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Pos6dBm)
 static void cmd_pos6dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = 6;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = 6;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Pos6dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Pos5dBm)
 static void cmd_pos5dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = 5;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = 5;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Pos5dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Pos4dBm)
 static void cmd_pos4dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = 4;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = 4;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Pos4dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Pos3dBm)
 static void cmd_pos3dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = 3;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = 3;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Pos3dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Pos2dBm)
 static void cmd_pos2dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = 2;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = 2;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Pos2dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Pos1dBm)
 static void cmd_pos1dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = 1;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = 1;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Pos1dBm) */
 
 static void cmd_pos0dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = 0;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = 0;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg1dBm)
 static void cmd_neg1dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -1;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -1;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg1dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg2dBm)
 static void cmd_neg2dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -2;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -2;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg2dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg3dBm)
 static void cmd_neg3dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -3;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -3;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg3dBm) */
 
 static void cmd_neg4dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -4;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -4;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg5dBm)
 static void cmd_neg5dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -5;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -5;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg5dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg6dBm)
 static void cmd_neg6dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -6;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -6;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg6dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg7dBm)
 static void cmd_neg7dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -7;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -7;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg7dBm) */
 
 static void cmd_neg8dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -8;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -8;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg9dBm)
 static void cmd_neg9dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -9;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -9;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg9dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg10dBm)
 static void cmd_neg10dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -10;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -10;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg10dBm) */
 
 static void cmd_neg12dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -12;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -12;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg14dBm)
 static void cmd_neg14dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -14;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -14;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg14dBm) */
 
 static void cmd_neg16dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -16;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -16;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg18dBm)
 static void cmd_neg18dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -18;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -18;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg18dBm) */
 
 static void cmd_neg20dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -20;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -20;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg22dBm)
 static void cmd_neg22dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -22;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -22;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg22dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg28dBm)
 static void cmd_neg28dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -28;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -28;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg28dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg30dBm)
 static void cmd_neg30dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -30;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -30;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg30dBm) */
 
 static void cmd_neg40dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -40;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -40;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg46dBm)
 static void cmd_neg46dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -46;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -46;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg46dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg70dBm)
 static void cmd_neg70dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -70;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -70;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg70dBm) */
 
 #if defined(RADIO_TXPOWER_TXPOWER_Neg100dBm)
 static void cmd_neg100dbm(const struct shell* shell, size_t argc, char** argv) {
-  config.txpower = -100;
-  shell_print(shell, "TX power : %d dBm", config.txpower);
+    config.txpower = -100;
+    shell_print(shell, "TX power : %d dBm", config.txpower);
 }
 #endif /* defined(RADIO_TXPOWER_TXPOWER_Neg100dBm) */
 
 static int cmd_nrf_1mbit(const struct shell* shell, size_t argc, char** argv) {
-  config.mode = NRF_RADIO_MODE_NRF_1MBIT;
-  shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_NRF_1MBIT));
+    config.mode = NRF_RADIO_MODE_NRF_1MBIT;
+    shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_NRF_1MBIT));
 
-  return 0;
+    return 0;
 }
 
 static int cmd_nrf_2mbit(const struct shell* shell, size_t argc, char** argv) {
-  config.mode = NRF_RADIO_MODE_NRF_2MBIT;
-  shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_NRF_2MBIT));
+    config.mode = NRF_RADIO_MODE_NRF_2MBIT;
+    shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_NRF_2MBIT));
 
-  return 0;
+    return 0;
 }
 
 #if defined(RADIO_MODE_MODE_Nrf_250Kbit)
 static int cmd_nrf_250kbit(const struct shell* shell, size_t argc,
                            char** argv) {
-  config.mode = NRF_RADIO_MODE_NRF_250KBIT;
-  shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_NRF_250KBIT));
+    config.mode = NRF_RADIO_MODE_NRF_250KBIT;
+    shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_NRF_250KBIT));
 
-  return 0;
+    return 0;
 }
 #endif /* defined(RADIO_MODE_MODE_Nrf_250Kbit) */
 
 #if defined(RADIO_MODE_MODE_Nrf_4Mbit0_5)
 static int cmd_nrf_4mbit_h_0_5(const struct shell* shell, size_t argc,
                                char** argv) {
-  config.mode = NRF_RADIO_MODE_NRF_4MBIT_H_0_5;
-  shell_print(shell, "Data rate: %s",
-              STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_H_0_5));
+    config.mode = NRF_RADIO_MODE_NRF_4MBIT_H_0_5;
+    shell_print(shell, "Data rate: %s",
+                STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_H_0_5));
 
-  return 0;
+    return 0;
 }
 #endif /* defined(RADIO_MODE_MODE_Nrf_4Mbit0_5) */
 
 #if defined(RADIO_MODE_MODE_Nrf_4Mbit0_25)
 static int cmd_nrf_4mbit_h_0_25(const struct shell* shell, size_t argc,
                                 char** argv) {
-  config.mode = NRF_RADIO_MODE_NRF_4MBIT_H_0_25;
-  shell_print(shell, "Data rate: %s",
-              STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_H_0_25));
+    config.mode = NRF_RADIO_MODE_NRF_4MBIT_H_0_25;
+    shell_print(shell, "Data rate: %s",
+                STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_H_0_25));
 
-  return 0;
+    return 0;
 }
 #endif /* defined(RADIO_MODE_MODE_Nrf_4Mbit0_25) */
 
 #if defined(RADIO_MODE_MODE_Nrf_4Mbit_0BT6)
 static int cmd_nrf_4mbit_bt_0_6(const struct shell* shell, size_t argc,
                                 char** argv) {
-  config.mode = NRF_RADIO_MODE_NRF_4MBIT_BT_0_6;
-  shell_print(shell, "Data rate: %s",
-              STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_BT_0_6));
+    config.mode = NRF_RADIO_MODE_NRF_4MBIT_BT_0_6;
+    shell_print(shell, "Data rate: %s",
+                STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_BT_0_6));
 
-  return 0;
+    return 0;
 }
 #endif /* defined(RADIO_MODE_MODE_Nrf_4Mbit_0BT6) */
 
 #if defined(RADIO_MODE_MODE_Nrf_4Mbit_0BT4)
 static int cmd_nrf_4mbit_bt_0_4(const struct shell* shell, size_t argc,
                                 char** argv) {
-  config.mode = NRF_RADIO_MODE_NRF_4MBIT_BT_0_4;
-  shell_print(shell, "Data rate: %s",
-              STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_BT_0_4));
+    config.mode = NRF_RADIO_MODE_NRF_4MBIT_BT_0_4;
+    shell_print(shell, "Data rate: %s",
+                STRINGIFY(NRF_RADIO_MODE_NRF_4MBIT_BT_0_4));
 
-  return 0;
+    return 0;
 }
 #endif /* defined(RADIO_MODE_MODE_Nrf_4Mbit_0BT4) */
 
 static int cmd_ble_1mbit(const struct shell* shell, size_t argc, char** argv) {
-  config.mode = NRF_RADIO_MODE_BLE_1MBIT;
-  shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_BLE_1MBIT));
+    config.mode = NRF_RADIO_MODE_BLE_1MBIT;
+    shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_BLE_1MBIT));
 
-  return 0;
+    return 0;
 }
 
 static int cmd_ble_2mbit(const struct shell* shell, size_t argc, char** argv) {
-  config.mode = NRF_RADIO_MODE_BLE_2MBIT;
-  shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_BLE_2MBIT));
+    config.mode = NRF_RADIO_MODE_BLE_2MBIT;
+    shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_BLE_2MBIT));
 
-  return 0;
+    return 0;
 }
 
 #if CONFIG_HAS_HW_NRF_RADIO_BLE_CODED
 static int cmd_ble_lr125kbit(const struct shell* shell, size_t argc,
                              char** argv) {
-  config.mode = NRF_RADIO_MODE_BLE_LR125KBIT;
-  shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_BLE_LR125KBIT));
+    config.mode = NRF_RADIO_MODE_BLE_LR125KBIT;
+    shell_print(shell, "Data rate: %s",
+                STRINGIFY(NRF_RADIO_MODE_BLE_LR125KBIT));
 
-  return 0;
+    return 0;
 }
 
 static int cmd_ble_lr500kbit(const struct shell* shell, size_t argc,
                              char** argv) {
-  config.mode = NRF_RADIO_MODE_BLE_LR500KBIT;
-  shell_print(shell, "Data rate: %s", STRINGIFY(NRF_RADIO_MODE_BLE_LR500KBIT));
+    config.mode = NRF_RADIO_MODE_BLE_LR500KBIT;
+    shell_print(shell, "Data rate: %s",
+                STRINGIFY(NRF_RADIO_MODE_BLE_LR500KBIT));
 
-  return 0;
+    return 0;
 }
 #endif /* CONFIG_HAS_HW_NRF_RADIO_BLE_CODED */
 
 #if CONFIG_HAS_HW_NRF_RADIO_IEEE802154
 static int cmd_ble_ieee(const struct shell* shell, size_t argc, char** argv) {
-  config.mode = NRF_RADIO_MODE_IEEE802154_250KBIT;
-  shell_print(shell, "Data rate: %s",
-              STRINGIFY(NRF_RADIO_MODE_IEEE802154_250KBIT));
+    config.mode = NRF_RADIO_MODE_IEEE802154_250KBIT;
+    shell_print(shell, "Data rate: %s",
+                STRINGIFY(NRF_RADIO_MODE_IEEE802154_250KBIT));
 
-  return 0;
+    return 0;
 }
 #endif /* CONFIG_HAS_HW_NRF_RADIO_IEEE802154 */
 
 static int cmd_pattern_random(const struct shell* shell, size_t argc,
                               char** argv) {
-  config.tx_pattern = TRANSMIT_PATTERN_RANDOM;
-  shell_print(shell, "Transmission pattern: %s",
-              STRINGIFY(TRANSMIT_PATTERN_RANDOM));
+    config.tx_pattern = TRANSMIT_PATTERN_RANDOM;
+    shell_print(shell, "Transmission pattern: %s",
+                STRINGIFY(TRANSMIT_PATTERN_RANDOM));
 
-  return 0;
+    return 0;
 }
 
 static int cmd_pattern_11110000(const struct shell* shell, size_t argc,
                                 char** argv) {
-  config.tx_pattern = TRANSMIT_PATTERN_11110000;
-  shell_print(shell, "Transmission pattern: %s",
-              STRINGIFY(TRANSMIT_PATTERN_11110000));
+    config.tx_pattern = TRANSMIT_PATTERN_11110000;
+    shell_print(shell, "Transmission pattern: %s",
+                STRINGIFY(TRANSMIT_PATTERN_11110000));
 
-  return 0;
+    return 0;
 }
 
 static int cmd_pattern_11001100(const struct shell* shell, size_t argc,
                                 char** argv) {
-  config.tx_pattern = TRANSMIT_PATTERN_11001100;
-  shell_print(shell, "Transmission pattern: %s",
-              STRINGIFY(TRANSMIT_PATTERN_11001100));
+    config.tx_pattern = TRANSMIT_PATTERN_11001100;
+    shell_print(shell, "Transmission pattern: %s",
+                STRINGIFY(TRANSMIT_PATTERN_11001100));
 
-  return 0;
+    return 0;
 }
 
 SHELL_STATIC_SUBCMD_SET_CREATE(
@@ -1118,121 +1158,121 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 
 static int cmd_print_payload(const struct shell* shell, size_t argc,
                              char** argv) {
-  struct radio_rx_stats rx_stats;
+    struct radio_rx_stats rx_stats;
 
-  memset(&rx_stats, 0, sizeof(rx_stats));
+    memset(&rx_stats, 0, sizeof(rx_stats));
 
-  radio_rx_stats_get(&rx_stats);
+    radio_rx_stats_get(&rx_stats);
 
-  shell_print(shell, "Received payload:");
-  shell_hexdump(shell, rx_stats.last_packet.buf, rx_stats.last_packet.len);
-  shell_print(shell, "Number of packets: %d", rx_stats.packet_cnt);
+    shell_print(shell, "Received payload:");
+    shell_hexdump(shell, rx_stats.last_packet.buf, rx_stats.last_packet.len);
+    shell_print(shell, "Number of packets: %d", rx_stats.packet_cnt);
 
-  return 0;
+    return 0;
 }
 
 #if CONFIG_FEM
 static int cmd_fem(const struct shell* shell, size_t argc, char** argv) {
-  if (argc == 1) {
-    shell_help(shell);
-    return SHELL_CMD_HELP_PRINTED;
-  }
+    if (argc == 1) {
+        shell_help(shell);
+        return SHELL_CMD_HELP_PRINTED;
+    }
 
-  if (argc > 2) {
-    shell_error(shell, "%s: bad parameters count.", argv[0]);
-    return -EINVAL;
-  }
+    if (argc > 2) {
+        shell_error(shell, "%s: bad parameters count.", argv[0]);
+        return -EINVAL;
+    }
 
-  if (argc == 2) {
-    shell_error(shell, "Unknown argument: %s.", argv[1]);
-    return -EINVAL;
-  }
+    if (argc == 2) {
+        shell_error(shell, "Unknown argument: %s.", argv[1]);
+        return -EINVAL;
+    }
 
-  return 0;
+    return 0;
 }
 
 #if !CONFIG_RADIO_TEST_POWER_CONTROL_AUTOMATIC
 static int cmd_fem_tx_power_control_set(const struct shell* shell, size_t argc,
                                         char** argv) {
-  uint32_t tx_power_control;
+    uint32_t tx_power_control;
 
-  if (argc == 1) {
-    shell_help(shell);
-    return SHELL_CMD_HELP_PRINTED;
-  }
+    if (argc == 1) {
+        shell_help(shell);
+        return SHELL_CMD_HELP_PRINTED;
+    }
 
-  if (argc > 2) {
-    shell_error(shell, "%s: bad parameters count", argv[0]);
-    return -EINVAL;
-  }
+    if (argc > 2) {
+        shell_error(shell, "%s: bad parameters count", argv[0]);
+        return -EINVAL;
+    }
 
-  tx_power_control = atoi(argv[1]);
+    tx_power_control = atoi(argv[1]);
 
-  config.fem.tx_power_control = tx_power_control;
+    config.fem.tx_power_control = tx_power_control;
 
-  shell_print(shell, "Front-end module (FEM) Tx power control set to %u",
-              tx_power_control);
+    shell_print(shell, "Front-end module (FEM) Tx power control set to %u",
+                tx_power_control);
 
-  return 0;
+    return 0;
 }
 #endif /* !CONFIG_RADIO_TEST_POWER_CONTROL_AUTOMATIC */
 
 static int cmd_fem_antenna_select(const struct shell* shell, size_t argc,
                                   char** argv) {
-  if (argc == 1) {
-    shell_help(shell);
-    return SHELL_CMD_HELP_PRINTED;
-  }
+    if (argc == 1) {
+        shell_help(shell);
+        return SHELL_CMD_HELP_PRINTED;
+    }
 
-  if (argc > 2) {
-    shell_error(shell, "%s: bad parameters count.", argv[0]);
-    return -EINVAL;
-  }
+    if (argc > 2) {
+        shell_error(shell, "%s: bad parameters count.", argv[0]);
+        return -EINVAL;
+    }
 
-  if (argc == 2) {
-    shell_error(shell, "Unknown argument: %s.", argv[1]);
-    return -EINVAL;
-  }
+    if (argc == 2) {
+        shell_error(shell, "Unknown argument: %s.", argv[1]);
+        return -EINVAL;
+    }
 
-  return 0;
+    return 0;
 }
 
 static int cmd_fem_antenna_1(const struct shell* shell, size_t argc,
                              char** argv) {
-  shell_print(shell, "ANT1 enabled, ANT2 disabled");
+    shell_print(shell, "ANT1 enabled, ANT2 disabled");
 
-  return fem_antenna_select(FEM_ANTENNA_1);
+    return fem_antenna_select(FEM_ANTENNA_1);
 }
 
 static int cmd_fem_antenna_2(const struct shell* shell, size_t argc,
                              char** argv) {
-  shell_print(shell, "ANT1 disabled, ANT2 enabled");
+    shell_print(shell, "ANT1 disabled, ANT2 enabled");
 
-  return fem_antenna_select(FEM_ANTENNA_2);
+    return fem_antenna_select(FEM_ANTENNA_2);
 }
 
 static int cmd_fem_ramp_up_set(const struct shell* shell, size_t argc,
                                char** argv) {
-  uint32_t ramp_up_time;
+    uint32_t ramp_up_time;
 
-  if (argc == 1) {
-    shell_help(shell);
-    return SHELL_CMD_HELP_PRINTED;
-  }
+    if (argc == 1) {
+        shell_help(shell);
+        return SHELL_CMD_HELP_PRINTED;
+    }
 
-  if (argc > 2) {
-    shell_error(shell, "%s: bad parameters count", argv[0]);
-    return -EINVAL;
-  }
+    if (argc > 2) {
+        shell_error(shell, "%s: bad parameters count", argv[0]);
+        return -EINVAL;
+    }
 
-  ramp_up_time = atoi(argv[1]);
+    ramp_up_time = atoi(argv[1]);
 
-  config.fem.ramp_up_time = ramp_up_time;
+    config.fem.ramp_up_time = ramp_up_time;
 
-  shell_print(shell, "Front-end module (FEM) radio rump-up time set to %d us",
-              ramp_up_time);
+    shell_print(shell, "Front-end module (FEM) radio rump-up time set to %d us",
+                ramp_up_time);
 
-  return 0;
+    return 0;
 }
 #endif /* CONFIG_FEM */
 
@@ -1364,28 +1404,28 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 #if CONFIG_RADIO_TEST_POWER_CONTROL_AUTOMATIC
 static int cmd_total_output_power_set(const struct shell* shell, size_t argc,
                                       char** argv) {
-  int power;
+    int power;
 
-  if (argc == 1) {
-    shell_help(shell);
-    return SHELL_CMD_HELP_PRINTED;
-  }
+    if (argc == 1) {
+        shell_help(shell);
+        return SHELL_CMD_HELP_PRINTED;
+    }
 
-  if (argc > 2) {
-    shell_error(shell, "%s: bad parameters count", argv[0]);
-    return -EINVAL;
-  }
+    if (argc > 2) {
+        shell_error(shell, "%s: bad parameters count", argv[0]);
+        return -EINVAL;
+    }
 
-  power = atoi(argv[1]);
+    power = atoi(argv[1]);
 
-  if ((power > INT8_MAX) || (power < INT8_MIN)) {
-    shell_error(shell, "%s: Out of range power value", argv[0]);
-    return -EINVAL;
-  }
+    if ((power > INT8_MAX) || (power < INT8_MIN)) {
+        shell_error(shell, "%s: Out of range power value", argv[0]);
+        return -EINVAL;
+    }
 
-  config.txpower = (int8_t)power;
+    config.txpower = (int8_t)power;
 
-  return 0;
+    return 0;
 }
 #endif /* CONFIG_RADIO_TEST_POWER_CONTROL_AUTOMATIC */
 
@@ -1446,19 +1486,19 @@ SHELL_CMD_REGISTER(fem, &sub_fem,
 #endif /* CONFIG_FEM */
 
 static int radio_cmd_init(void) {
-  /* Do not initialize radio_test at system startup to allow DTM to use the
-   * timer */
-  /* radio_test will be initialized when first radio_test command is used */
+    /* Do not initialize radio_test at system startup to allow DTM to use the
+     * timer */
+    /* radio_test will be initialized when first radio_test command is used */
 
 #if CONFIG_RADIO_TEST_POWER_CONTROL_AUTOMATIC
-  /* When front-end module is used, set output power to the front-end module
-   * default output power.
-   */
-  config.txpower = fem_default_tx_output_power_get();
+    /* When front-end module is used, set output power to the front-end module
+     * default output power.
+     */
+    config.txpower = fem_default_tx_output_power_get();
 #endif /* CONFIG_RADIO_TEST_POWER_CONTROL_AUTOMATIC */
 
-  /* Don't call radio_test_init() here - let it be initialized on demand */
-  return 0;
+    /* Don't call radio_test_init() here - let it be initialized on demand */
+    return 0;
 }
 
 SYS_INIT(radio_cmd_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEVICE);
