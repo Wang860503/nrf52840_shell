@@ -96,5 +96,5 @@ target_compile_definitions(app PRIVATE
     RW_SUPPORT     # pn7160 
     senao # UWB antenna senao config
     UWBIOT_APP_BUILD__DEMO_TEST_TX
-    #UWBIOT_APP_BUILD__DEMO_TEST_RX
+    UWBIOT_APP_BUILD__DEMO_TEST_RX
 )

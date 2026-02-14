@@ -15,6 +15,8 @@ LOG_MODULE_REGISTER(cmd);
 /* Prevent UWB API from declaring its own LOG module in this file */
 #define UWB_API_MAIN_FILE
 #include "AppInternal.h"
+#include "demo_test_rx.h"
+#include "demo_test_rx_sem.h"
 #include "demo_test_tx.h"
 #include "demo_test_tx_sem.h"
 #include "dtm.h"
@@ -435,6 +437,11 @@ static int cmd_dtm_test(const struct shell* sh, size_t argc, char** argv) {
             return 0;
         }
 
+        if (k_sem_count_get(&uwb_test_rx) == 0) {
+            shell_error(sh, "UWB demo test rx is already running.");
+            return 0;
+        }
+
         if (k_sem_count_get(&radio_sem) == 0) {
             shell_error(sh,
                         "radio test is starting, Please close the radio test.");
@@ -556,6 +563,16 @@ static int cmd_em4095_test(const struct shell* sh, size_t argc, char** argv) {
             return 0;
         }
 
+        if (k_sem_count_get(&uwb_test_rx) == 0) {
+            shell_error(sh, "UWB demo test rx is already running.");
+            return 0;
+        }
+
+        if (k_sem_count_get(&uwb_test_tx) == 0) {
+            shell_error(sh, "UWB demo test tx is already running.");
+            return 0;
+        }
+
         /* Take em4095_sem to indicate EM4095 is starting */
         if (k_sem_take(&em4095_sem, K_NO_WAIT) != 0) {
             shell_error(sh, "EM4095 is already running.");
@@ -646,10 +663,33 @@ static void uwb_tx_thread_entry(void* p1, void* p2, void* p3) {
 
 static int cmd_uwb_tx(const struct shell* sh, size_t argc, char** argv) {
     if (strcmp(argv[0], "start") == 0) {
+        if (k_sem_count_get(&radio_sem) == 0) {
+            shell_error(sh,
+                        "radio test is starting, Please close the radio test.");
+            return 0;
+        }
+
+        /* Check if EM4095 is running */
+        if (k_sem_count_get(&em4095_sem) == 0) {
+            shell_error(sh, "EM4095 is starting, Please close the EM4095.");
+            return 0;
+        }
+
+        if (k_sem_count_get(&dtm_sem) == 0) {
+            shell_error(sh, "DTM transport thread already running.");
+            return 0;
+        }
+
+        if (k_sem_count_get(&uwb_test_rx) == 0) {
+            shell_error(sh, "UWB demo test rx is already running.");
+            return 0;
+        }
+
         if (k_sem_take(&uwb_test_tx, K_NO_WAIT) != 0) {
             shell_warn(sh, "UWB demo test tx is already running.");
-            return -1;
+            return 0;
         }
+
         /* Save shell pointer for thread */
         uwb_tx_shell_ptr = sh;
 
@@ -686,10 +726,124 @@ static int cmd_uwb_tx(const struct shell* sh, size_t argc, char** argv) {
         }
 
     } else {
+        shell_error(sh, "Usage: uwb_test_rx <cmd>");
+        shell_print(sh, "Commands:");
+        shell_print(sh, "  start          - Start UWB RX test");
+        shell_print(sh, "  settime        - Set UWB rx launch time");
+        return -EINVAL;
+    }
+    return 0;
+}
+
+static struct k_thread uwb_rx_thread_data;
+static K_THREAD_STACK_DEFINE(uwb_rx_thread_stack, 16384);
+static const struct shell* uwb_rx_shell_ptr = NULL;
+
+static void uwb_rx_thread_entry(void* p1, void* p2, void* p3) {
+    ARG_UNUSED(p1);
+    ARG_UNUSED(p2);
+    ARG_UNUSED(p3);
+
+    const struct shell* sh = uwb_rx_shell_ptr;
+    /* Set global shell pointer for UWB logging */
+    extern const struct shell* g_uwb_shell_ptr;
+    g_uwb_shell_ptr = sh;
+
+    /* Print app name before any initialization to avoid being dropped */
+    shell_print(sh, "#################################################");
+    shell_print(sh, "## Demo Test RX : " UWBIOT_UWBS_NAME);
+    shell_print(sh, "## " UWBIOTVER_STR_PROD_NAME_VER_FULL);
+    shell_print(sh, "#################################################");
+
+    shell_print(sh, "Initializing UWB Demo...");
+    UWBDemo_Init();
+
+    /* 設置線程優先級為 3，高於 UWB 內部任務的優先級 5
+     * 這樣可以確保測試線程能夠及時響應 UWB 命令的回應
+     */
+    k_thread_priority_set(k_current_get(), 5);
+
+    shell_print(sh, "Starting Demo_Test_Rx...");
+    Demo_Test_Rx();
+
+    /* 恢復線程優先級 */
+    k_thread_priority_set(k_current_get(), 0);
+    /* 再次延遲確保線程完全退出 */
+    phOsalUwb_Delay(100);
+
+    /* Clear global shell pointer */
+    g_uwb_shell_ptr = NULL;
+    k_sem_give(&uwb_test_rx);
+}
+
+static int cmd_uwb_rx(const struct shell* sh, size_t argc, char** argv) {
+    if (strcmp(argv[0], "start") == 0) {
+        if (k_sem_count_get(&radio_sem) == 0) {
+            shell_error(sh,
+                        "radio test is starting, Please close the radio test.");
+            return 0;
+        }
+
+        /* Check if EM4095 is running */
+        if (k_sem_count_get(&em4095_sem) == 0) {
+            shell_error(sh, "EM4095 is starting, Please close the EM4095.");
+            return 0;
+        }
+
+        if (k_sem_count_get(&dtm_sem) == 0) {
+            shell_error(sh, "DTM transport thread already running.");
+            return 0;
+        }
+
+        if (k_sem_count_get(&uwb_test_tx) == 0) {
+            shell_error(sh, "UWB demo test tx is already running.");
+            return 0;
+        }
+
+        if (k_sem_take(&uwb_test_rx, K_NO_WAIT) != 0) {
+            shell_warn(sh, "UWB demo test rx is already running.");
+            return 0;
+        }
+
+        /* Save shell pointer for thread */
+        uwb_rx_shell_ptr = sh;
+
+        /* Start UWB TX test thread
+         * 優先級設置為 K_PRIO_COOP(3)，高於 UWB 內部任務的優先級 5
+         * 這樣可以確保測試線程能夠及時響應 UWB 命令的回應
+         * 使用協作式優先級以確保線程能夠完整執行而不被搶占
+         */
+        k_thread_create(&uwb_rx_thread_data, uwb_rx_thread_stack,
+                        K_THREAD_STACK_SIZEOF(uwb_rx_thread_stack),
+                        uwb_rx_thread_entry, NULL, NULL, NULL, K_PRIO_COOP(3),
+                        0, K_NO_WAIT);
+        k_thread_name_set(&uwb_rx_thread_data, "uwb_demo_test_rx");
+    } else if (strcmp(argv[0], "settime") == 0) {
+        if (k_sem_count_get(&uwb_test_rx) == 0) {
+            shell_warn(sh, "UWB demo test rx is starting.");
+            return 0;
+        }
+
+        if (argc < 2) {
+            shell_error(sh, "Usage: uwb_test_rx settime <seconds>");
+            shell_print(sh, "  <seconds> - Receive time in seconds (1-30)");
+            return -EINVAL;
+        }
+
+        int time_val = atoi(argv[1]);
+        if (time_val <= 0 || time_val > 30) {
+            shell_warn(sh, "Invalid time value: %d. Using default: 10 seconds",
+                       time_val);
+            receive_time = 10;
+        } else {
+            receive_time = time_val;
+            shell_print(sh, "Launch time set to %d seconds", receive_time);
+        }
+    } else {
         shell_error(sh, "Usage: uwb_test_tx <cmd>");
         shell_print(sh, "Commands:");
-        shell_print(sh, "  start          - Start UWB TX test");
-        shell_print(sh, "  settime        - Set UWB tx launch time");
+        shell_print(sh, "  start          - Start UWB RX test");
+        shell_print(sh, "  settime        - Set UWB rx receive time");
         return -EINVAL;
     }
     return 0;
@@ -743,7 +897,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_em4095,
 SHELL_CMD_REGISTER(em4095_test, &sub_em4095, "EM4095 test commands",
                    cmd_em4095_test);
 
-/*UWB demo_test_rx*/
+/*UWB demo_test_tx*/
 SHELL_STATIC_SUBCMD_SET_CREATE(
     sub_uwb_test_tx,
     SHELL_CMD_ARG(start, NULL, "Start UWB demo test tx", cmd_uwb_tx, 1, 0),
@@ -751,3 +905,12 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
     SHELL_SUBCMD_SET_END);
 SHELL_CMD_REGISTER(uwb_test_tx, &sub_uwb_test_tx, "UWB demo test tx commands",
                    cmd_uwb_tx);
+
+/*UWB demo_test_rx*/
+SHELL_STATIC_SUBCMD_SET_CREATE(
+    sub_uwb_test_rx,
+    SHELL_CMD_ARG(start, NULL, "Start UWB demo test rx", cmd_uwb_rx, 1, 0),
+    SHELL_CMD_ARG(settime, NULL, "Set UWB tx receive time", cmd_uwb_rx, 1, 1),
+    SHELL_SUBCMD_SET_END);
+SHELL_CMD_REGISTER(uwb_test_rx, &sub_uwb_test_rx, "UWB demo test tx commands",
+                   cmd_uwb_rx);
