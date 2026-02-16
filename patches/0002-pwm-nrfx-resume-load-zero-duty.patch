@@ -1,0 +1,22 @@
+--- a/drivers/pwm/pwm_nrfx.c
++++ b/drivers/pwm/pwm_nrfx.c
+@@ -373,6 +373,9 @@ static int pwm_resume(const struct device *dev)
+ 	const struct pwm_nrfx_config *config = dev->config;
+ 	uint8_t initially_inverted = 0;
+ 
++	nrf_gpio_cfg_output(NRF_GPIO_PIN_MAP(1,2));
++	nrf_gpio_pin_write(NRF_GPIO_PIN_MAP(1,2), 0);
++
+ 	(void)pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+ 
+ 	for (size_t i = 0; i < NRF_PWM_CHANNEL_COUNT; i++) {
+@@ -393,6 +396,9 @@ static int pwm_resume(const struct device *dev)
+ 
+ 		seq_values_ptr_get(dev)[i] = PWM_NRFX_CH_VALUE(0, inverted);
+ 	}
++	
++	nrf_gpio_cfg_output(NRF_GPIO_PIN_MAP(1,2));
++	nrf_gpio_pin_write(NRF_GPIO_PIN_MAP(1,2), 0);
+ 
+ 	return 0;
+ }
